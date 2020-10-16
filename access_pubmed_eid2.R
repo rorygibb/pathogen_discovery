@@ -47,7 +47,7 @@ searchNCBI = function(x){
   # run scrape (5 attempts and exit if successful)
   e = simpleError("test error")
   for(attempt in 1:5){
-    search = tryCatch(EUtilsGet(query_df$id[x], type="efetch", db=query_df$Database[x]), error=function(e) e)
+    search = tryCatch(RISmed::EUtilsGet(query_df$id[x], type="efetch", db=query_df$Database[x]), error=function(e) e)
     if(class(search)[1] != "simpleError"){ break }
     Sys.sleep(0.5)
   }
