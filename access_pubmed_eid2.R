@@ -2,8 +2,8 @@
 # ============= Scrape NCBI databases for EID2 publication details inc. year ============
 
 # dependencies and basedir
-pacman::p_load("RISmed", "dplyr", "magrittr")
 setwd("C:/Users/roryj/Documents/PhD/202008_pathogendiversity_rarefaction/")
+pacman::p_load("RISmed", "dplyr", "magrittr")
 
 
 
@@ -28,8 +28,9 @@ nuc = eid2[ eid2$Sequences != "", -which(names(eid2) == "Publications")] %>%
   dplyr::rename("id" = Sequences)
 nuc$Database = "nuccore"
 
-# combine into dataframe to query (176,000 associations)
+# combine into dataframe to query (147,000 unique ids)
 query_df = rbind(pm, nuc)
+query_df = query_df[ !duplicated(query_df$id), ]
 query_df$record = 1:nrow(query_df)
 
 
@@ -52,48 +53,56 @@ searchNCBI = function(x){
     Sys.sleep(0.5)
   }
   
-  # return error result if still throwing error
-  #if(class(search)[1] == "simpleError"){  
-  if(class(search)[1] != "Medline"){
-    res = data.frame(
-      id = query_df$id[x],
-      Database = query_df$Database[x],
-      PMID = NA,
-      Year = NA,
-      Journal = NA,
-      Title = NA,
-      Date_NCBI = NA,
-      PathName_NCBI = NA
-    ) 
-    Sys.sleep(0.5)
-    return(res)
-  }
-  
   # PubMed
   if(query_df$Database[x] == "pubmed"){
+    
+    # if not returned successfully
+    if(class(search)[1] != "Medline"){
+      res = data.frame(
+        record = query_df$record[x],
+        id = query_df$id[x],
+        Database = query_df$Database[x],
+        Lookup_Successful = FALSE,
+        PMID = NA,
+        Year = NA,
+        Journal = NA,
+        Title = NA,
+        Date_NCBI1 = NA,
+        Date_NCBI2 = NA,
+        PathName_NCBI = NA
+      ) 
+      Sys.sleep(0.5)
+      return(res)
+    }
     
     # if no records exist
     if(length(search@PMID) == 0){
       res = data.frame(
+        record = query_df$record[x],
         id = query_df$id[x],
         Database = query_df$Database[x],
+        Lookup_Successful = TRUE,
         PMID = "no record",
         Year = NA,
         Journal = NA,
         Title = NA,
-        Date_NCBI = NA,
+        Date_NCBI1 = NA,
+        Date_NCBI2 = NA,
         PathName_NCBI = NA
       ) 
     } else{
       # otherwise return records
       res = data.frame(
+        record = query_df$record[x],
         id = query_df$id[x],
         Database = query_df$Database[x],
+        Lookup_Successful = TRUE,
         PMID = search@PMID,
         Year = search@YearPubmed,
         Journal = search@MedlineTA,
         Title = search@ArticleTitle,
-        Date_NCBI = NA,
+        Date_NCBI1 = NA,
+        Date_NCBI2 = NA,
         PathName_NCBI = NA
       )
     }
@@ -102,26 +111,52 @@ searchNCBI = function(x){
   # Nucleotide
   if(query_df$Database[x] == "nuccore") {
     
-    if(length(as.vector(search[7])) == 0){
+    # error
+    if(class(search)[1] == "simpleError"){  
       res = data.frame(
+        record = query_df$record[x],
         id = query_df$id[x],
         Database = query_df$Database[x],
+        Lookup_Successful = FALSE,
         PMID = NA,
         Year = NA,
         Journal = NA,
         Title = NA,
-        Date_NCBI = "no record",
+        Date_NCBI1 = NA,
+        Date_NCBI2 = NA,
+        PathName_NCBI = NA
+      ) 
+      Sys.sleep(0.5)
+      return(res)
+    }
+    
+    # any vs no records
+    if(length(as.vector(search[7])) == 0){
+      res = data.frame(
+        record = query_df$record[x],
+        id = query_df$id[x],
+        Database = query_df$Database[x],
+        Lookup_Successful = TRUE,
+        PMID = NA,
+        Year = NA,
+        Journal = NA,
+        Title = NA,
+        Date_NCBI1= "no record",
+        Date_NCBI2= "no record",
         PathName_NCBI = NA
       ) 
     } else{
       res = data.frame(
+        record = query_df$record[x],
         id = query_df$id[x],
         Database = query_df$Database[x],
+        Lookup_Successful = TRUE,
         PMID = NA,
         Year = NA,
         Journal = NA,
         Title = NA,
-        Date_NCBI = as.vector(search[7]),
+        Date_NCBI1 = as.vector(search[7]),
+        Date_NCBI2 = as.vector(search[8]),
         PathName_NCBI = as.vector(search[9]) 
         )
     }
@@ -135,31 +170,72 @@ searchNCBI = function(x){
 
 # ============== run scrape and append records to csv ============
 
+# # create filenames
+# output_loc = "./output/data_processed/pathogens/eid2_scrape/"
+# save_file = paste(output_loc, "EID2_Scrape_17102020.csv", sep="")
+# 
+# # append each new query to csv
+# for(i in 1:nrow(query_df)){
+# 
+#   # run query
+#   cat(paste(i, "...", sep=""))
+#   e = simpleError("test error")
+#   resx = tryCatch(searchNCBI(i))
+# 
+#   # initialise file on first iteration, and then append
+#   if(class(resx)[1] == "simpleError"){ next
+#   } else if(i == 1){
+#     write.csv(resx, save_file, row.names=FALSE)
+#   } else{
+#     write.table(resx, save_file, append=TRUE, sep=",", col.names=FALSE, row.names=FALSE, quote=TRUE) # append
+#   }
+# }
+
+
+
+# read in pubmeds
+pm = read.csv("./output/data_processed/pathogens/eid2_scrape/PubMed_scrape_17102020.csv", stringsAsFactors = FALSE) %>%
+  filter(Database=="pubmed")
+nc = read.csv("./output/data_processed/pathogens/eid2_scrape/PubMed_scrape_17102020.csv", stringsAsFactors = FALSE) %>%
+  filter(Database=="nuccore") %>%
+  select(record, id, Database)
+nc2 = read.csv("./output/data_processed/pathogens/EID2_Year_PubMedscrape_16102020.csv", stringsAsFactors = FALSE) %>%
+  filter(Database == "nuccore" & id %in% nc$id) %>%
+  select(7:14) %>%
+  mutate(Date_NCBI1 = Date_NCBI,
+         Date_NCBI2 = NA) %>%
+  select(-Date_NCBI)
+
+# combine
+nc = left_join(nc, nc2[ !duplicated(nc2$id), ])
+nc$Lookup_Successful = ifelse(!is.na(nc$Date_NCBI1), TRUE, FALSE)
+
+# add to pm
+scrape = rbind(pm, nc)
+
+# get unsuccessful
+query_df = scrape[ scrape$Lookup_Successful == FALSE, ]
+
 # create filenames
 output_loc = "./output/data_processed/pathogens/eid2_scrape/"
-save_file = paste(output_loc, "EID2_Scrape_16102020.csv", sep="")
+save_file = paste(output_loc, "NucCore_Scrape_19102020.csv", sep="")
 
 # append each new query to csv
 for(i in 1:nrow(query_df)){
-
+  
   # run query
   cat(paste(i, "...", sep=""))
   e = simpleError("test error")
   resx = tryCatch(searchNCBI(i))
   
-  # create save file or append
+  # initialise file on first iteration, and then append
   if(class(resx)[1] == "simpleError"){ next 
   } else if(i == 1){
     write.csv(resx, save_file, row.names=FALSE)
   } else{
-    write.table(resx, save_file, append=TRUE, sep=",", col.names=FALSE, row.names=FALSE, quote=FALSE) # append
+    write.table(resx, save_file, append=TRUE, sep=",", col.names=FALSE, row.names=FALSE, quote=TRUE) # append
   }
 }
-
-
-
-
-
 
 
 
