@@ -30,6 +30,9 @@ nuc$Database = "nuccore"
 
 # combine into dataframe to query (147,000 unique ids)
 query_df = rbind(pm, nuc)
+eid_df = query_df # for later
+
+# prep for scrape
 query_df = query_df[ !duplicated(query_df$id), ]
 query_df$record = 1:nrow(query_df)
 
@@ -172,7 +175,7 @@ searchNCBI = function(x){
 
 # # create filenames
 # output_loc = "./output/data_processed/pathogens/eid2_scrape/"
-# save_file = paste(output_loc, "EID2_Scrape_17102020.csv", sep="")
+# save_file = paste(output_loc, "EID2_FullScrape_19102020.csv", sep="")
 # 
 # # append each new query to csv
 # for(i in 1:nrow(query_df)){
@@ -192,237 +195,12 @@ searchNCBI = function(x){
 # }
 
 
+# ============== combine with EID2 records ==============
 
-# read in pubmeds
-pm = read.csv("./output/data_processed/pathogens/eid2_scrape/PubMed_scrape_17102020.csv", stringsAsFactors = FALSE) %>%
-  filter(Database=="pubmed")
-nc = read.csv("./output/data_processed/pathogens/eid2_scrape/PubMed_scrape_17102020.csv", stringsAsFactors = FALSE) %>%
-  filter(Database=="nuccore") %>%
-  select(record, id, Database)
-nc2 = read.csv("./output/data_processed/pathogens/EID2_Year_PubMedscrape_16102020.csv", stringsAsFactors = FALSE) %>%
-  filter(Database == "nuccore" & id %in% nc$id) %>%
-  select(7:14) %>%
-  mutate(Date_NCBI1 = Date_NCBI,
-         Date_NCBI2 = NA) %>%
-  select(-Date_NCBI)
+# combine and save
+scrape = read.csv("./output/data_processed/pathogens/eid2_scrape/EID2_FullScrape_19102020.csv", stringsAsFactors = FALSE) %>%
+  dplyr::mutate(id = as.character(id))
+eid_dfx = left_join(eid_df, scrape, by=c("id", "Database")) %>%
+  filter(!is.na(Lookup_Successful))
+write.csv(eid_dfx, "./output/data_processed/pathogens/EID2_Year_full.csv", row.names=FALSE)
 
-# combine
-nc = left_join(nc, nc2[ !duplicated(nc2$id), ])
-nc$Lookup_Successful = ifelse(!is.na(nc$Date_NCBI1), TRUE, FALSE)
-
-# add to pm
-scrape = rbind(pm, nc)
-
-# get unsuccessful
-query_df = scrape[ scrape$Lookup_Successful == FALSE, ]
-
-# create filenames
-output_loc = "./output/data_processed/pathogens/eid2_scrape/"
-save_file = paste(output_loc, "NucCore_Scrape_19102020.csv", sep="")
-
-# append each new query to csv
-for(i in 1:nrow(query_df)){
-  
-  # run query
-  cat(paste(i, "...", sep=""))
-  e = simpleError("test error")
-  resx = tryCatch(searchNCBI(i))
-  
-  # initialise file on first iteration, and then append
-  if(class(resx)[1] == "simpleError"){ next 
-  } else if(i == 1){
-    write.csv(resx, save_file, row.names=FALSE)
-  } else{
-    write.table(resx, save_file, append=TRUE, sep=",", col.names=FALSE, row.names=FALSE, quote=TRUE) # append
-  }
-}
-
-
-
-
-# ================= OLD =======================
-
-# # ============== run scrape in increments of 500, saving output after each ===============
-# 
-# # create filenames
-# output_loc = "./output/data_processed/pathogens/"
-# 
-# # will take ~24 hours to do 176,000 (EID2 mammal records)
-# # increments and output loc
-# inc = seq(1, nrow(query_df), by=500)
-# 
-# # run scrape in increments of 500 (deal with errors, save progress)
-# for(i in 1:length(inc)){
-#   
-#   # print
-#   print(paste(inc[i], "...", sep=""))
-#   
-#   # specify records to search; if file already exists (e.g. running second time round) skip to next
-#   if(i < length(inc)){ range = inc[i]:(inc[i+1]-1) }
-#   if(i == length(inc)){ range = inc[i]:nrow(query_df) }
-#   filename = paste(output_loc, "EID2Year_Mammals_", max(range), ".R", sep="")
-#   if(file.exists(filename)){ next }
-#   
-#   # run scrape and print time after each 500 iterations
-#   sx = Sys.time()
-#   e = simpleError("test error")
-#   resx = tryCatch(lapply(range, searchNCBI), error=function(e) e)
-#   if(class(resx)[1] == "simpleError"){ next 
-#   } else{
-#     save(resx, file=filename)
-#     }
-#   ex = Sys.time()
-#   print(ex-sx)
-# }
-# 
-# 
-# # ======================= second run: identify records where lookup was unsuccessful and try again ====================
-# 
-# # load and combine into df
-# ff = list.files(output_loc, pattern=".R", full.names = TRUE)
-# result = data.frame()
-# for(i in 1:length(ff)){ 
-#   load(ff[i]) 
-#   resx = do.call(rbind.data.frame, resx)
-#   result = rbind(result, resx)
-# }
-# 
-# # remove duplicates and combine
-# result = result[ !duplicated(result$id), ]
-# eid = left_join(query_df, result, by=c("id"="id", "Database"="Database"))
-# eid$record = 1:nrow(eid)
-# #write.csv(eid, "./output/data_processed/EID2_scrape_v1_gaps.csv", row.names=FALSE)
-# 
-# 
-# # ------------- extract gaps for mammals -------------
-# 
-# # NAs for mammals (not human)
-# eid = eid[ eid$Carrier.classification != "Human", ]
-# query_df = eid[ which(eid$Database == "pubmed" & is.na(eid$PMID) | eid$Database == "nuccore" & is.na(eid$Date_NCBI)), ]
-# 
-# # create filenames
-# output_loc = "./output/data_processed/pathogens/update/"
-# 
-# # increments and output loc
-# inc = seq(1, nrow(query_df), by=500)
-# 
-# # run scrape in increments of 500 (deal with errors, save progress)
-# for(i in 1:length(inc)){
-#   
-#   # print
-#   print(paste(inc[i], "...", sep=""))
-#   
-#   # specify records to search; if file already exists (e.g. running second time round) skip to next
-#   if(i < length(inc)){ range = inc[i]:(inc[i+1]-1) }
-#   if(i == length(inc)){ range = inc[i]:nrow(query_df) }
-#   filename = paste(output_loc, "EID2Year_Mammals_update_", max(range), ".R", sep="")
-#   if(file.exists(filename)){ next }
-#   
-#   # run scrape and print time after each 500 iterations
-#   sx = Sys.time()
-#   e = simpleError("test error")
-#   resx = tryCatch(lapply(range, searchNCBI), error=function(e) e)
-#   if(class(resx)[1] == "simpleError"){ next 
-#   } else{
-#     save(resx, file=filename)
-#   }
-#   ex = Sys.time()
-#   print(ex-sx)
-# }
-# 
-# # load and compile
-# ff = list.files(output_loc, pattern=".R", full.names = TRUE)
-# result = data.frame()
-# for(i in 1:length(ff)){ 
-#   load(ff[i]) 
-#   resx = do.call(rbind.data.frame, resx)
-#   result = rbind(result, resx)
-# }
-# 
-# # subset to get records that still don't have lookup successfully
-# eid1 = eid[! eid$id %in% query_df$id, ]
-# eid2 = eid[ (eid$id %in% query_df$id) & (!eid$id %in% result$id), ] # still missing
-# eid3 = left_join(eid[ (eid$id %in% query_df$id) & (eid$id %in% result$id), c(1:8, 15)], result[ !duplicated(result$id), ])
-# 
-# # fine except a few; lookup
-# eid = rbind(eid1, eid3)
-# 
-# 
-# 
-# # -------------- run again to fill last gaps -----------------
-# 
-# # create filenames
-# output_loc = "./output/data_processed/"
-# query_df = eid2
-# 
-# # create save file 
-# for(i in 1:nrow(query_df)){
-# #for(i in 1:50){
-#     
-#   cat(paste(i, "...", sep=""))
-#   e = simpleError("test error")
-#   resx = tryCatch(searchNCBI(i))
-#   if(class(resx)[1] == "simpleError"){ next 
-#   } else if(i == 1){
-#     write.csv(resx, paste(output_loc, "EID_scrape_16102020.csv", sep=""), row.names=FALSE)
-#   } else{
-#     write.table(resx, paste(output_loc, "EID_scrape_16102020.csv", sep=""), append=TRUE, sep=",", col.names=FALSE, row.names=FALSE, quote=FALSE) # append
-#   }
-# }
-# 
-# # load outcome
-# rr = read.csv("./output/data_processed/EID_scrape_16102020.csv", stringsAsFactors = FALSE)
-# 
-# # combine with EID2
-# eid2x = eid2[ , c(1:8, 15) ]
-# eid2x = left_join(eid2x, rr[ !duplicated(rr$id), ])
-# 
-# # combine all
-# eid_fin = rbind(eid, eid2x)
-# write.csv(eid_fin, "./output/data_processed/pathogens/EID2_Year_PubMedscrape_16102020.csv", row.names=FALSE)
-# 
-# library(RISmed)
-# library(dplyr)
-# library(magrittr)
-# 
-# setwd("C:/Users/roryj/Documents/PhD/202008_pathogendiversity_rarefaction/")
-
-
-# 
-# # increments and output loc
-# query_df = eid2
-# inc = seq(1, nrow(query_df), by=500)
-# 
-# # run scrape in increments of 500 (deal with errors, save progress)
-# for(i in 1:length(inc)){
-#   
-#   # print
-#   print(paste(inc[i], "...", sep=""))
-#   
-#   # specify records to search; if file already exists (e.g. running second time round) skip to next
-#   if(i < length(inc)){ range = inc[i]:(inc[i+1]-1) }
-#   if(i == length(inc)){ range = inc[i]:nrow(query_df) }
-#   filename = paste(output_loc, "EID2Year_Mammals_update_", max(range), ".R", sep="")
-#   if(file.exists(filename)){ next }
-#   
-#   # run scrape and print time after each 500 iterations
-#   sx = Sys.time()
-#   e = simpleError("test error")
-#   resx = tryCatch(lapply(range, searchNCBI), error=function(e) e)
-#   if(class(resx)[1] == "simpleError"){ next 
-#   } else{
-#     save(resx, file=filename)
-#   }
-#   ex = Sys.time()
-#   print(ex-sx)
-# }
-# 
-# # load and compile
-# ff = list.files(output_loc, pattern=".R", full.names = TRUE)
-# result = data.frame()
-# for(i in 1:length(ff)){ 
-#   load(ff[i]) 
-#   resx = do.call(rbind.data.frame, resx)
-#   result = rbind(result, resx)
-# }
-# 
