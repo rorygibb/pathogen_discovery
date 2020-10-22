@@ -12,7 +12,7 @@ pacman::p_load("RISmed", "dplyr", "magrittr")
 
 # eid2 for mammals
 eid2 = read.csv("./data/host_pathogen_2020/data/hostparasitedb_raw/EID2/Wardehetal_2015_EID2/SpeciesInteractions_EID2.csv", stringsAsFactors = FALSE) %>%
-  dplyr::filter(Carrier.classification %in% c("Human", "Mammal", "Domestic", "Primate", "Rodent"))
+  dplyr::filter(Carrier.classification %in% c("Human", "Mammal", "Domestic", "Primate", "Rodent", "Aves"))
 
 # EID2 data with PMIDs (stored in 'Publications' column)
 # 'database' field corresponds to exact name of db in NCBI databases (used to lookup relevant db)
@@ -173,34 +173,43 @@ searchNCBI = function(x){
 
 # ============== run scrape and append records to csv ============
 
-# # create filenames
-# output_loc = "./output/data_processed/pathogens/eid2_scrape/"
-# save_file = paste(output_loc, "EID2_FullScrape_19102020.csv", sep="")
-# 
-# # append each new query to csv
-# for(i in 1:nrow(query_df)){
-# 
-#   # run query
-#   cat(paste(i, "...", sep=""))
-#   e = simpleError("test error")
-#   resx = tryCatch(searchNCBI(i))
-# 
-#   # initialise file on first iteration, and then append
-#   if(class(resx)[1] == "simpleError"){ next
-#   } else if(i == 1){
-#     write.csv(resx, save_file, row.names=FALSE)
-#   } else{
-#     write.table(resx, save_file, append=TRUE, sep=",", col.names=FALSE, row.names=FALSE, quote=TRUE) # append
-#   }
-# }
+# create filenames
+output_loc = "./output/data_processed/pathogens/eid2_scrape/"
+save_file = paste(output_loc, "EID2_AvesScrape_20102020.csv", sep="")
+
+# append each new query to csv
+for(i in 1:nrow(query_df)){
+
+  # run query
+  cat(paste(i, "...", sep=""))
+  e = simpleError("test error")
+  resx = tryCatch(searchNCBI(i))
+
+  # initialise file on first iteration, and then append
+  if(class(resx)[1] == "simpleError"){ next
+  } else if(i == 1){
+    write.csv(resx, save_file, row.names=FALSE)
+  } else{
+    write.table(resx, save_file, append=TRUE, sep=",", col.names=FALSE, row.names=FALSE, quote=TRUE) # append
+  }
+}
 
 
 # ============== combine with EID2 records ==============
 
-# combine and save
-scrape = read.csv("./output/data_processed/pathogens/eid2_scrape/EID2_FullScrape_19102020.csv", stringsAsFactors = FALSE) %>%
+# combine for mammals
+scrape = read.csv("./output/data_processed/pathogens/eid2_scrape/EID2_MammalsScrape_19102020.csv", stringsAsFactors = FALSE) %>%
   dplyr::mutate(id = as.character(id))
-eid_dfx = left_join(eid_df, scrape, by=c("id", "Database")) %>%
+eid_dfx = left_join(eid_df[ eid_df$id %in% scrape$id, ], scrape, by=c("id", "Database")) %>%
   filter(!is.na(Lookup_Successful))
-write.csv(eid_dfx, "./output/data_processed/pathogens/EID2_Year_full.csv", row.names=FALSE)
+
+# combine for birds
+scrape_a = read.csv("./output/data_processed/pathogens/eid2_scrape/EID2_AvesScrape_20102020.csv", stringsAsFactors = FALSE) %>%
+  dplyr::mutate(id = as.character(id))
+eid_dfy = left_join(eid_df[ eid_df$id %in% scrape_a$id, ], scrape_a, by=c("id", "Database")) %>%
+  filter(!is.na(Lookup_Successful))
+
+# combine and save
+eid_full = rbind(eid_dfx, eid_dfy)
+write.csv(eid_full, "./output/data_processed/pathogens/EID2_Year_MammalsBirds_full.csv", row.names=FALSE)
 
