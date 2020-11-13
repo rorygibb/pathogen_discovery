@@ -14,9 +14,28 @@ dd = dd[ !is.na(dd$ParasiteType), ]
 dd = dd[ !is.na(dd$Host_Harmonised), ]
 
 # publication effort by year
-pubs = read.csv("./output/data_processed/host_effort/PubMed_Hosts_PubsByYear.csv", stringsAsFactors = FALSE)
-pp = expand.grid(1950:2020, unique(dd$Host_Harmonised)) %>%
-  rename("Year"=Var1, "Host_Harmonised"=Var2)
+pubs = read.csv("./output/data_processed/host_effort/PubMed_Hosts_PubsByYear_Final.csv", stringsAsFactors = FALSE) %>%
+  dplyr::mutate(Year = as.numeric(Year)) %>%
+  dplyr::filter(!is.na(Year)) %>%
+  dplyr::filter(!Note %in% c("No publications", "Lookup error"))
+pp = expand.grid(1950:2020, unique(pubs$Host)) %>%
+  rename("Year"=Var1, "Host_Harmonised"=Var2) %>%
+  left_join(pubs[ , c("Year", "Host", "NumPubs")], by=c("Year"="Year", "Host_Harmonised"="Host"))
+pp$NumPubs[ is.na(pp$NumPubs) ] = 0
+pp = pp %>%
+  dplyr::arrange(Host_Harmonised, Year) %>%
+  group_by(Host_Harmonised) %>%
+  dplyr::mutate(CumPubs = cumsum(NumPubs))
+
+
+# ggplot(pp[ pp$Host_Harmonised %in% sample(unique(pp$Host_Harmonised), 20, replace=F), ]) +
+#   geom_line(aes(Year, NumPubs)) +
+#   facet_wrap(~Host_Harmonised, scales="free_y") +
+#   theme_bw()
+# ggplot(pp[ pp$Host_Harmonised %in% sample(unique(pp$Host_Harmonised), 20, replace=F), ]) +
+#   geom_line(aes(Year, CumPubs)) +
+#   facet_wrap(~Host_Harmonised, scales="free_y") +
+#   theme_bw()
 
 
 # # create dataframe for everything
@@ -24,7 +43,8 @@ pp = expand.grid(1950:2020, unique(dd$Host_Harmonised)) %>%
 #   rename("Year"=Var1, "Host_Harmonised"=Var2) %>%
 #   left_join(assoc[ !duplicated(assoc$Host_Harmonised), c("Host_Harmonised", "HostClass", "HostOrder", "HostFamily")], by=c("Host_Harmonised")) %>%
 #   left_join(assoc[ , c("Host_Harmonised", "Year", "PathogenName_Harmonised", "ParasiteType", "Database", "DetectionQuality", "HumanInfective_Any", "IsZoonotic") ], by=c("Host_Harmonised", "Year"))
-# 
+
+
 
 # ===================== Summarise by species and year ======================
 
@@ -49,7 +69,7 @@ temporalRarefact = function(database="all", pathogen_type="all", detection_quali
     cat(paste(spp, "...", sep=""))
     ddy = ddx[ ddx$Host_Harmonised == spp & !is.na(ddx$Host_Harmonised), ]
     res = data.frame()
-    for(y in 1950:2019){
+    for(y in 1920:2019){
       resx = data.frame(Host_Harmonised = spp, HostClass = ddy$HostClass[1], HostOrder = ddy$HostOrder[1], HostFamily=ddy$HostFamily[1],
                         Year = y,
                         PathRich = n_distinct(ddy$PathogenName_Harmonised[ ddy$Year <= y ]), # num pathogens by this year
@@ -75,9 +95,9 @@ temporalRarefact = function(database="all", pathogen_type="all", detection_quali
 curves = read.csv("./output/data_processed/curves/curves_allpathogens_alldb_detection0_Oct2020.csv", stringsAsFactors = FALSE)
 
 # viruses
-#vcurves = temporalRarefact(database="all", pathogen_type = "virus", detection_quality=0)
-#write.csv(vcurves, "./output/data_processed/curves/curves_viruses_alldb_detection0_Oct2020.csv", row.names=FALSE)
-vcurves = read.csv("./output/data_processed/curves/curves_viruses_alldb_detection0_Oct2020.csv", stringsAsFactors=FALSE)
+# vcurves = temporalRarefact(database="all", pathogen_type = "virus", detection_quality=0)
+# write.csv(vcurves, "./output/data_processed/curves/curves_viruses_alldb_detection0_Oct2020_2.csv", row.names=FALSE)
+vcurves = read.csv("./output/data_processed/curves/curves_viruses_alldb_detection0_Oct2020_2.csv", stringsAsFactors=FALSE)
 
 # viruses strict detection
 #vcurves2 = temporalRarefact(database="all", pathogen_type = "virus", detection_quality=2)
@@ -85,48 +105,210 @@ vcurves = read.csv("./output/data_processed/curves/curves_viruses_alldb_detectio
 vcurves2 = read.csv("./output/data_processed/curves/curves_viruses_alldb_detection2_Oct2020.csv", stringsAsFactors=FALSE)
 
 # combine with pubmed publications per species
+curves = left_join(curves[ curves$Host_Harmonised %in% pp$Host_Harmonised, ], pp, by=c("Year", "Host_Harmonised"))
+vcurves = left_join(vcurves[ vcurves$Host_Harmonised %in% pp$Host_Harmonised, ], pp, by=c("Year", "Host_Harmonised"))
+vcurves2 = left_join(vcurves2[ vcurves2$Host_Harmonised %in% pp$Host_Harmonised, ], pp, by=c("Year", "Host_Harmonised"))
 
 
+# plot curves
+plotCurveExamples = function(spp){
+  dfx = curves[ curves$Host_Harmonised == spp & curves$Year <= 2015, ]
+  a = ggplot(dfx) + geom_line(aes(Year, PathRich), col="coral2", size=0.5) + 
+    ggtitle(spp) +
+    theme_minimal() + 
+    ylab("Path richness") +
+    theme(axis.title.x=element_blank(), plot.title=element_text(hjust=0.5, size=16)) 
+  b = ggplot(dfx) + geom_line(aes(Year, CumPubs), col="blue", size=0.5) + 
+    theme_minimal() + 
+    ylab("Cumulative pubs") +
+    theme(axis.title.x=element_blank()) 
+  c = ggplot(dfx) + geom_line(aes(Year, NumPubs), col="blue", size=0.5) + 
+    ylab("Annual pubs") +
+    theme_minimal() + 
+    theme(axis.title.x=element_text(size=13)) 
+  px = gridExtra::grid.arrange(a, b, c, nrow=3)
+  return(px)
+}
 
-# viz
-ggplot(curves[ curves$TotalPathRich >= 40 & curves$Year <=2017 ,]) + 
-  geom_point(aes(Year, PathRich, size=NumRecords), alpha=0.3, col="skyblue4") +
-  geom_line(aes(Year, PathRich), col="coral2", size=0.5) +
+p1 = plotCurveExamples("felis silvestris")
+p2 = plotCurveExamples("crocuta crocuta")
+p3 = plotCurveExamples("mastomys natalensis")
+p4 = plotCurveExamples("eidolon helvum")
+p5 = plotCurveExamples("canis latrans")
+p6 = plotCurveExamples("macaca mulatta")
+
+ppp = gridExtra::grid.arrange(grobs=list(p1, p2, p3, p4, p5, p6), nrow=2, ncol=3, height=1.2, width=1)
+ggsave(ppp, file="./publication_curve_examples.png", device="png", dpi=300, width=12, height=14, units="in", scale=0.8)
+
+
+plotCurveExamples("myodes glareolus")
+
+
+vcx = vcurves[ vcurves$HostClass == "Mammalia" & vcurves$Host_Harmonised != "homo sapiens", ] %>%
+  group_by(Host_Harmonised) %>%
+  arrange(desc(TotalPathRich))
+vcx = vcx[ vcx$Host_Harmonised %in% unique(vcx$Host_Harmonised)[1:20], ]
+vcx$Host_Harmonised = factor(vcx$Host_Harmonised, levels=unique(vcx$Host_Harmonised), ordered=TRUE)
+
+p1 = ggplot(vcx[ vcx$Year <= 2016, ]) + 
+  geom_point(aes(Year, PathRich), col="skyblue4", size=1.5) +
+  theme_classic() +
   facet_wrap(~Host_Harmonised, scales="free_y") +
-  theme_minimal()
-
-ggplot(curves[ curves$HostOrder == "Rodentia" & curves$TotalPathRich >= 5 & curves$Year <=2017 ,]) + 
-  geom_point(aes(Year, PathRich, size=NumRecords), alpha=0.3, col="skyblue4") +
-  geom_line(aes(Year, PathRich), col="coral2", size=0.5) +
-  facet_wrap(~Host_Harmonised, scales="free_y") +
-  theme_minimal()
-
-ggplot(vcurves[ vcurves$TotalPathRich >= 20 & vcurves$Year <=2017 ,]) + 
-  geom_point(aes(Year, PathRich, size=NumRecords), alpha=0.3, col="skyblue4") +
-  geom_line(aes(Year, PathRich), col="coral2", size=0.5) +
-  facet_wrap(~Host_Harmonised, scales="free_y") +
-  theme_minimal()
-
-ggplot(vcurves[ vcurves$TotalPathRich >= 20 & vcurves$Year <=2017 ,]) + 
-  geom_point(aes(Year, PathRich, size=NumRecords), alpha=0.3, col="skyblue4") +
-  geom_line(aes(Year, PathRich), col="coral2", size=0.5) +
-  facet_wrap(~Host_Harmonised, scales="free_y") +
-  theme_minimal()
+  xlab("Year") +
+  ylab("Viral richness") + 
+  ggtitle("Viral richness by year") +
+  theme(plot.title = element_text(hjust=0.5, size=14))
+p2 = ggplot(vcx[ vcx$Year <= 2016, ]) + 
+  geom_point(aes(CumPubs, PathRich, col=Year), size=1.5) +
+  theme_classic() +
+  facet_wrap(~Host_Harmonised, scales="free") +
+  xlab("Cumulative publications") +
+  ylab("Viral richness") +
+  ggtitle("Viral richness by cumulative publications") +
+  theme(plot.title = element_text(hjust=0.5, size=14))
+ggsave(p1, file="./output/figures/AllDatasets_ViralRichnessByYear.png", device="png", units="in", width=9, height=6, scale=1)
+ggsave(p2, file="./output/figures/AllDatasets_ViralRichnessByCumPubs.png", device="png", units="in", width=9, height=6, scale=1)
 
 
-ggplot(vcurves2[ vcurves2$TotalPathRich >= 20 & vcurves2$Year <=2017 ,]) + 
-  geom_point(aes(Year, PathRich, size=NumRecords), alpha=0.3, col="skyblue4") +
-  geom_line(aes(Year, PathRich), col="coral2", size=0.5) +
-  facet_wrap(~Host_Harmonised, scales="free_y") +
-  theme_minimal()
+### mean curve
 
-ggplot(vcurves2[ vcurves2$TotalPathRich >= 20 & vcurves2$Year <=2017 ,]) + 
-  geom_point(aes(CumRecords, PathRich), alpha=0.3, col="skyblue4") +
-  #geom_line(aes(Year, PathRich), col="coral2", size=0.5) +
+px = ggplot(vcurves[ vcurves$Year < 2017 & vcurves$HostClass == "Mammalia", ]) + 
+  geom_smooth(aes(Year, PathRich), method="gam", method.args=list(family="poisson")) +
+  #geom_point(aes(Year, PathRich, group=Host_Harmonised), alpha=0.2, size=0.1) +
+  theme_minimal() +
+  ylab("Mean pathogen richness (all species)")
+ggsave(px,file= "./output/figures/MeanDiscoveryCurve.png", device="png", units="in", width=6, height=5, scale=1)
+
+vcurves$HostOrder[ vcurves$HostOrder == "Artiodactyla" ] = "Cetartiodactyla"
+vc2 = vcurves %>%
+  filter(Year < 2017,
+         HostClass == "Mammalia",
+         HostOrder %in% c("Rodentia", "Chiroptera", "Primates", "Cetartiodactyla", "Perissodactyla", "Carnivora", "Lagomorpha"))
+px_order = ggplot(vc2) + 
+  geom_smooth(aes(Year, PathRich, group=HostOrder, col=HostOrder), method="gam", method.args=list(family="poisson")) +
+  #geom_point(aes(Year, PathRich, group=Host_Harmonised), alpha=0.2, size=0.1) +
+  theme_minimal() +
+  ylab("Mean pathogen richness (all species)") + 
+  geom_hline(yintercept=0, lty=2)
+
+px_order2 = ggplot(vc2[ vc2$TotalPathRich>9, ]) + 
+  geom_smooth(aes(Year, PathRich, group=HostOrder, col=HostOrder), method="gam", method.args=list(family="poisson")) +
+  #geom_point(aes(Year, PathRich, group=Host_Harmonised), alpha=0.2, size=0.1) +
+  theme_minimal() +
+  ylab("Mean pathogen richness (all species)") + 
+  geom_hline(yintercept=0, lty=2)
+
+# ================ summarise by virus over time =====================
+
+
+
+hostrange = dd[ dd$ParasiteType == "virus" & dd$HostClass =="Mammalia" & dd$Year > 1800 & dd$Year < 2020 & dd$Year != 1900, ] %>%
+  group_by(Parasite) %>%
+  dplyr::summarise(
+    FirstYearReported = min(Year),
+    HostRange = n_distinct(Host_Harmonised),
+    OrderRange = n_distinct(HostOrder),
+    FamilyRange = n_distinct(HostFamily)
+    )
+
+# virus first year of discovery
+px = ggplot(hostrange) + 
+  geom_point(aes(FirstYearReported, HostRange), size=2, alpha=0.5, col="skyblue4") + 
+  geom_smooth(aes(FirstYearReported, HostRange), method="gam") +
+  theme_classic()
+ggsave(px,file= "./output/figures/HostRangeOverTime_Mammals.png", device="png", units="in", width=6, height=5, scale=1)
+
+px = ggplot(hostrange) + 
+  geom_point(aes(FirstYearReported, FamilyRange), size=2, alpha=0.5, col="skyblue4") + 
+  geom_smooth(aes(FirstYearReported, FamilyRange), method="gam") +
+  theme_classic() + ylab("Num Families infected")
+ggsave(px,file= "./output/figures/HostRangeOverTime_Mammals_Family.png", device="png", units="in", width=6, height=5, scale=1)
+
+
+
+
+# 
+# dfx = curves[ curves$Host_Harmonised == "mastomys natalensis", ]
+# a = ggplot(dfx) + geom_line(aes(Year, PathRich), col="coral2", size=0.5) + theme_bw()
+# b = ggplot(dfx) + geom_line(aes(Year, NumPubs), col="blue", size=0.5) + theme_bw()
+# 
+# 
+# 
+# # viz
+# ggplot(curves[ curves$TotalPathRich >= 40 & curves$Year <=2017 ,]) + 
+#   geom_point(aes(Year, PathRich, size=NumRecords), alpha=0.3, col="skyblue4") +
+#   geom_line(aes(Year, PathRich), col="coral2", size=0.5) +
+#   facet_wrap(~Host_Harmonised, scales="free_y") +
+#   theme_minimal()
+# 
+# ggplot(curves[ curves$HostOrder == "Rodentia" & curves$TotalPathRich >= 5 & curves$Year <=2017 ,]) + 
+#   geom_point(aes(Year, PathRich, size=NumRecords), alpha=0.3, col="skyblue4") +
+#   geom_line(aes(Year, PathRich), col="coral2", size=0.5) +
+#   facet_wrap(~Host_Harmonised, scales="free_y") +
+#   theme_minimal()
+# 
+# ggplot(vcurves[ vcurves$TotalPathRich >= 20 & vcurves$Year <=2017 ,]) + 
+#   geom_point(aes(Year, PathRich, size=NumRecords), alpha=0.3, col="skyblue4") +
+#   geom_line(aes(Year, PathRich), col="coral2", size=0.5) +
+#   facet_wrap(~Host_Harmonised, scales="free_y") +
+#   theme_minimal()
+# 
+# ggplot(vcurves[ vcurves$TotalPathRich >= 20 & vcurves$Year <=2017 ,]) + 
+#   geom_point(aes(Year, PathRich, size=NumRecords), alpha=0.3, col="skyblue4") +
+#   geom_line(aes(Year, PathRich), col="coral2", size=0.5) +
+#   facet_wrap(~Host_Harmonised, scales="free_y") +
+#   theme_minimal()
+# 
+# 
+# ggplot(vcurves2[ vcurves2$TotalPathRich >= 20 & vcurves2$Year <=2017 ,]) + 
+#   geom_point(aes(Year, PathRich, size=NumRecords), alpha=0.3, col="skyblue4") +
+#   geom_line(aes(Year, PathRich), col="coral2", size=0.5) +
+#   facet_wrap(~Host_Harmonised, scales="free_y") +
+#   theme_minimal()
+# 
+# ggplot(vcurves2[ vcurves2$TotalPathRich >= 20 & vcurves2$Year <=2017 ,]) + 
+#   geom_point(aes(CumRecords, PathRich), alpha=0.3, col="skyblue4") +
+#   #geom_line(aes(Year, PathRich), col="coral2", size=0.5) +
+#   facet_wrap(~Host_Harmonised, scales="free") +
+#   theme_minimal()
+
+
+ggplot(curves[ curves$HostFamily == "Muridae" & curves$Year <= 2017, ]) + 
+  geom_line(aes(CumPubs, PathRich), col="blue", size=0.2) +
+  geom_point(aes(CumPubs, PathRich), col="blue", size=0.4) +
   facet_wrap(~Host_Harmonised, scales="free") +
   theme_minimal()
 
+ggplot(curves[ curves$TotalPathRich >= 30 & curves$Year <= 2017, ]) + 
+  geom_point(aes(CumPubs, PathRich), col="blue", size=0.2) +
+  facet_wrap(~Host_Harmonised, scales="free") +
+  theme_minimal()
+ggplot(vcurves[ vcurves$TotalPathRich >= 10 & vcurves$Year <= 2017, ]) + 
+  geom_point(aes(CumPubs, PathRich), col="blue", size=0.2) +
+  facet_wrap(~Host_Harmonised, scales="free") +
+  theme_minimal()
 
+plotOrder = function(order, curves_df, num_spp=25){
+  
+  cc = curves_df[ curves_df$HostOrder == order, ]
+  host_order = cc[ !duplicated(cc$Host_Harmonised), ] %>%
+    arrange(desc(TotalPathRich))
+  host_order = host_order[ 1:num_spp, ]
+  cc = cc[ cc$Host_Harmonised %in% host_order$Host_Harmonised, ]
+  cc$Host_Harmonised = factor(cc$Host_Harmonised, levels=host_order$Host_Harmonised, ordered=TRUE)
+  cc = cc[ cc$Year<=2010, ]
+  
+  ggplot(cc) + 
+    #geom_line(aes(CumPubs, PathRich), col="blue", size=0.2) +
+    geom_point(aes(CumPubs, PathRich), col="blue", size=1) +
+    facet_wrap(~Host_Harmonised, scales="free") +
+    theme_minimal()
+}
+
+plotOrder("Primates", curves, 36)
+plotOrder("Rodentia", vcurves, 36)
+plotOrder("Chiroptera", vcurves, 36)
+plotOrder("Artiodactyla", vcurves, 36)
 
 
 
