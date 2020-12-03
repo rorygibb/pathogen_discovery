@@ -181,7 +181,7 @@ write.csv(curve_preds, "./output/order_models/curves_byspecies_inlabrupois.csv",
 
 
 
-# =================================
+# ==================== some viz =========================
 
 curve_preds = curve_preds[ curve_preds$VRichness > ]
 curve_preds$HostSpecies = factor(curve_preds$HostSpecies, levels=unique(curve_preds$HostSpecies), ordered=TRUE)
@@ -302,6 +302,7 @@ fcor = fixed %>%
   dplyr::filter(median > -10) %>%
   left_join(curves[ !duplicated(curves$HostSpecies), c("HostSpecies", "VRichness")])
 
+# pretty much no relationship between slope and total richness
 ggplot(fcor[ fcor$Domestic == "Wild" & fcor$HostSpecies != "homo sapiens", ]) + 
   geom_point(aes(VRichness, median, group=HostSpecies), position=position_dodge(width=0.1), alpha=0.25) + 
   geom_linerange(aes(VRichness, ymin=q0.025, ymax=q0.975, group=HostSpecies), position=position_dodge(width=0.1), alpha=0.25) + 
@@ -310,27 +311,13 @@ ggplot(fcor[ fcor$Domestic == "Wild" & fcor$HostSpecies != "homo sapiens", ]) +
 
 cor(fcor$median, fcor$VRichness)
 
-# 
-# +
-#   geom_linerange(aes(HostOrder, ymin=q0.025, ymax=q0.975, col=model2, group=HostSpecies), position=position_dodge(width=0.5)) + 
-#   geom_hline(yintercept=0, lty=2) +
-#   theme_minimal() +
-#   ylab(expression(beta[year])) +
-#   scale_color_viridis_d( name="Time epoch", begin=0.2, end=0.7) +
-#   theme(plot.title=element_text(size=14, hjust=0.5),
-#         axis.title.y = element_text(size=16),
-#         axis.title.x = element_blank(),
-#         legend.title = element_text(size=12), 
-#         legend.text = element_text(size=11), 
-#         axis.text.y = element_text(size=11),
-#         axis.text.x = element_text(size=11, angle=90))
-# 
 
 
 
 
 
-# beta diversity over time
+
+# ======================= How stable are ranks of species and order level viral richness over time? ============================
 
 # 1. Order level comparison of rank of mean viral richness
 
