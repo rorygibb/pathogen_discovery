@@ -111,6 +111,8 @@ curvesw = expand.grid(unique(ddw$HostOrder), unique(ddw$Domestic), 1930:2016) %>
 #   dplyr::mutate(NumPubs = replace(NumPubs, is.na(NumPubs), 0))
 
 
+
+
 # ================ for each Order, fit poisson model to discovery rates ===================
 
 # fits Poisson model of discovery rates (novel virus counts per year) for a specified order with specified data
@@ -353,88 +355,92 @@ ggplot() +
         axis.title.y = element_text(size=14),
         axis.title.x = element_text(size=12),
         axis.text = element_text(size=11))
+# 
+# 
+# # species
+# spp = "pan troglodytes"
+# datx = curves[ curves$Host == spp & curves$Year <= 2015, ]
+# #datx = curves[ curves$Year <= 2015 & curves$Host %in% unique(curves$Host)[1:250] & curves$Host != "homo sapiens", ]
+# 
+# # formula: linear effect of year + intercept
+# datx$x = 1:nrow(datx)
+# form = Discovered ~ x + Intercept
+# bru_mod = bru(form, datx, family = "poisson")
+# summary(bru_mod)
+# 
+# # predict field for each year
+# x4pred = data.frame(x = 1:nrow(datx))
+# predx_bru1 = predict(bru_mod, x4pred, ~ exp(x + Intercept), n.samples=2000)
+# daty = left_join(datx, predx_bru1)
+# 
+# ggplot() +
+#   geom_point(data = daty, aes(Year, Discovered), size=1, col="grey70", alpha=0.8) +
+#   geom_line(data = daty, aes(Year, median)) + 
+#   geom_ribbon(data = daty, aes(Year, ymin=q0.025, ymax=q0.975), fill="skyblue4", alpha=0.25) +
+#   theme_minimal() + 
+#   #ggtitle(Hmisc::capitalize(daty$Host[1])) + 
+#   ylab(expression(lambda)) + 
+#   xlab("Year") +
+#   theme(plot.title=element_text(size=14, hjust=0.5),
+#         axis.title.y = element_text(size=14),
+#         axis.title.x = element_text(size=12),
+#         axis.text = element_text(size=11))
+# 
+# # formula: linear effect of year + intercept > 1995
+# datx = datx[ datx$Year >= 1995 ,]
+# datx$x = 1:nrow(datx)
+# form = Discovered ~ x + Intercept
+# bru_mod = bru(form, datx, family = "poisson")
+# summary(bru_mod)
+# 
+# # predict field for each year
+# x4pred = data.frame(x = 1:nrow(datx))
+# predx_bru1 = predict(bru_mod, x4pred, ~ exp(x + Intercept), n.samples=2000)
+# daty = left_join(datx, predx_bru1)
+# 
+# ggplot() +
+#   geom_point(data = daty, aes(Year, Discovered), size=1, col="grey70", alpha=0.8) +
+#   geom_line(data = daty, aes(Year, median)) + 
+#   geom_ribbon(data = daty, aes(Year, ymin=q0.025, ymax=q0.975), fill="skyblue4", alpha=0.25) +
+#   theme_minimal() + 
+#   #ggtitle(Hmisc::capitalize(daty$Host[1])) + 
+#   #ylab("Number of viruses discovered") + 
+#   ylab(expression(lambda)) +
+#   xlab("Year") +
+#   theme(plot.title=element_text(size=14, hjust=0.5),
+#         axis.title.y = element_text(size=14),
+#         axis.title.x = element_text(size=12),
+#         axis.text = element_text(size=11))
+# 
+# 
+# # formula: linear effect of year + intercept
+# datx = datx[ datx$Year >= 1970 ,]
+# datx$x = 1:nrow(datx)
+# form = Discovered ~ x + Intercept
+# bru_mod = bru(form, datx, family = "poisson")
+# summary(bru_mod)
+# 
+# # predict field for each year
+# x4pred = data.frame(x = 1:nrow(datx))
+# predx_bru1 = predict(bru_mod, x4pred, ~ exp(x + Intercept), n.samples=2000)
+# daty = left_join(datx, predx_bru1)
+# 
+# ggplot() +
+#   geom_point(data = daty, aes(Year, Discovered), size=1, col="grey70", alpha=0.8) +
+#   geom_line(data = daty, aes(Year, median)) + 
+#   geom_ribbon(data = daty, aes(Year, ymin=q0.025, ymax=q0.975), fill="skyblue4", alpha=0.25) +
+#   theme_minimal() + 
+#   ggtitle(Hmisc::capitalize(daty$Host[1])) + 
+#   ylab("Number of viruses discovered") + 
+#   xlab("Year") +
+#   theme(plot.title=element_text(size=14, hjust=0.5),
+#         axis.title.y = element_text(size=14),
+#         axis.title.x = element_text(size=12),
+#         axis.text = element_text(size=11))
+# 
+# 
+# 
 
 
-# species
-spp = "pan troglodytes"
-datx = curves[ curves$Host == spp & curves$Year <= 2015, ]
-#datx = curves[ curves$Year <= 2015 & curves$Host %in% unique(curves$Host)[1:250] & curves$Host != "homo sapiens", ]
 
-# formula: linear effect of year + intercept
-datx$x = 1:nrow(datx)
-form = Discovered ~ x + Intercept
-bru_mod = bru(form, datx, family = "poisson")
-summary(bru_mod)
-
-# predict field for each year
-x4pred = data.frame(x = 1:nrow(datx))
-predx_bru1 = predict(bru_mod, x4pred, ~ exp(x + Intercept), n.samples=2000)
-daty = left_join(datx, predx_bru1)
-
-ggplot() +
-  geom_point(data = daty, aes(Year, Discovered), size=1, col="grey70", alpha=0.8) +
-  geom_line(data = daty, aes(Year, median)) + 
-  geom_ribbon(data = daty, aes(Year, ymin=q0.025, ymax=q0.975), fill="skyblue4", alpha=0.25) +
-  theme_minimal() + 
-  #ggtitle(Hmisc::capitalize(daty$Host[1])) + 
-  ylab(expression(lambda)) + 
-  xlab("Year") +
-  theme(plot.title=element_text(size=14, hjust=0.5),
-        axis.title.y = element_text(size=14),
-        axis.title.x = element_text(size=12),
-        axis.text = element_text(size=11))
-
-# formula: linear effect of year + intercept > 1995
-datx = datx[ datx$Year >= 1995 ,]
-datx$x = 1:nrow(datx)
-form = Discovered ~ x + Intercept
-bru_mod = bru(form, datx, family = "poisson")
-summary(bru_mod)
-
-# predict field for each year
-x4pred = data.frame(x = 1:nrow(datx))
-predx_bru1 = predict(bru_mod, x4pred, ~ exp(x + Intercept), n.samples=2000)
-daty = left_join(datx, predx_bru1)
-
-ggplot() +
-  geom_point(data = daty, aes(Year, Discovered), size=1, col="grey70", alpha=0.8) +
-  geom_line(data = daty, aes(Year, median)) + 
-  geom_ribbon(data = daty, aes(Year, ymin=q0.025, ymax=q0.975), fill="skyblue4", alpha=0.25) +
-  theme_minimal() + 
-  #ggtitle(Hmisc::capitalize(daty$Host[1])) + 
-  #ylab("Number of viruses discovered") + 
-  ylab(expression(lambda)) +
-  xlab("Year") +
-  theme(plot.title=element_text(size=14, hjust=0.5),
-        axis.title.y = element_text(size=14),
-        axis.title.x = element_text(size=12),
-        axis.text = element_text(size=11))
-
-
-# formula: linear effect of year + intercept
-datx = datx[ datx$Year >= 1970 ,]
-datx$x = 1:nrow(datx)
-form = Discovered ~ x + Intercept
-bru_mod = bru(form, datx, family = "poisson")
-summary(bru_mod)
-
-# predict field for each year
-x4pred = data.frame(x = 1:nrow(datx))
-predx_bru1 = predict(bru_mod, x4pred, ~ exp(x + Intercept), n.samples=2000)
-daty = left_join(datx, predx_bru1)
-
-ggplot() +
-  geom_point(data = daty, aes(Year, Discovered), size=1, col="grey70", alpha=0.8) +
-  geom_line(data = daty, aes(Year, median)) + 
-  geom_ribbon(data = daty, aes(Year, ymin=q0.025, ymax=q0.975), fill="skyblue4", alpha=0.25) +
-  theme_minimal() + 
-  ggtitle(Hmisc::capitalize(daty$Host[1])) + 
-  ylab("Number of viruses discovered") + 
-  xlab("Year") +
-  theme(plot.title=element_text(size=14, hjust=0.5),
-        axis.title.y = element_text(size=14),
-        axis.title.x = element_text(size=12),
-        axis.text = element_text(size=11))
-
-
-
+# ======================= 2. Comparison of decay in total richness by 

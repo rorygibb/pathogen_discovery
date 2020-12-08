@@ -1,7 +1,7 @@
 
 
 
-# ====================== Generate species viral discovery curves for mammals using Shaw, GMPD2, HP3 =====================
+# ====================== Generate species viral discovery curves for mammals using Shaw, GMPD2, HP3, EID2 =====================
 
 # root dir and dependencies
 # dependencies and basedir
@@ -22,6 +22,13 @@ assoc$Domestic = ifelse(assoc$Host_Harmonised %in% domestic, "Domestic", "Wild")
 tr = assoc %>%
   group_by(Host_Harmonised) %>%
   dplyr::summarise(VRichness = n_distinct(Pathogen_Harmonised))
+
+# publication effort by year
+# this needs some thought and work if it's worth including
+pubs = read.csv("./output/host_effort/PubMed_Hosts_PubsByYear_Final.csv", stringsAsFactors = FALSE) %>%
+  dplyr::filter(Note == "") %>%
+  dplyr::select(1:3) %>%
+  dplyr::rename("HostSpecies" = Host)
 
 # unique associations by year
 dd = assoc %>%
@@ -50,6 +57,12 @@ curves = expand.grid(unique(dd$Host_Harmonised), 1930:2016) %>%
   dplyr::group_by(HostSpecies) %>%
   dplyr::mutate(VirusCumulative = cumsum(Discovered))
   
+# publications
+curves = left_join(curves, pubs) %>%
+  dplyr::mutate(NumPubs = replace(NumPubs, is.na(NumPubs), 0))
+
+
+# ======================== initial =============================
 
 # # some initial viz
 # ggplot(curves[ curves$Host %in% unique(curves$Host)[1:40], ]) + 
@@ -80,14 +93,12 @@ curves = expand.grid(unique(dd$Host_Harmonised), 1930:2016) %>%
 
 
 
+# ================ 1. Model of viral discovery rate at species level ===================
 
-
-# ================ for each species, fit poisson model to discovery rates ===================
-
-# fits Poisson model of discovery rates (novel virus counts per year) for a specified order with specified data
-# equivalent to fitting inhomogenous 1D Poisson process but without smudging event times
+# fits Poisson model of discovery rates (novel virus counts per year) for a specified species with specified data
+# equivalent to fitting nonhomogenous 1D Poisson process but without smudging event times
 # for 3 time epochs: 1930 to present, 1960 to present, and 1990 to present
-# currently effect of year is linear (i.e. exponential with log-link); could explore SPDE but may be more intractable if we're interested in broad trends
+# currently effect of year is linear (i.e. exponential with log-link); could explore SPDE for gam-like fits but may be more intractable if we're interested in broad trends
 
 fitDiscoveryRateCurve = function(species, data){
   
@@ -175,105 +186,48 @@ fixed = do.call(rbind.data.frame, lapply(result, "[[", 1)) %>%
 curve_preds = do.call(rbind.data.frame, lapply(result, "[[", 2)) %>%
   left_join(curves[ !duplicated(curves$HostSpecies), c("HostSpecies", "VRichness")])
 
-write.csv(fixed, "./output/order_models/fixedeffects_byspecies_inlabrupois.csv", row.names=FALSE)
-write.csv(curve_preds, "./output/order_models/curves_byspecies_inlabrupois.csv", row.names=FALSE)
+# write.csv(fixed, "./output/order_models/fixedeffects_byspecies_inlabrupois.csv", row.names=FALSE)
+# write.csv(curve_preds, "./output/order_models/curves_byspecies_inlabrupois.csv", row.names=FALSE)
 
 
 
 
-# ==================== some viz =========================
+# ======================= 2. Summary statistics of model outputs ============================
 
-curve_preds = curve_preds[ curve_preds$VRichness > ]
-curve_preds$HostSpecies = factor(curve_preds$HostSpecies, levels=unique(curve_preds$HostSpecies), ordered=TRUE)
+# model outputs 
+fixed = read.csv("./output/order_models/fixedeffects_byspecies_inlabrupois.csv", stringsAsFactors = FALSE)
+curve_preds = read.csv("./output/order_models/curves_byspecies_inlabrupois.csv", stringsAsFactors=FALSE)
 
-ggplot(curve_preds[ curve_preds$model == 1930 & curve_preds$HostSpecies %in% unique(curve_preds$HostSpecies)[1:60], ]) +
-  #geom_point(aes(Year, Discovered), size=1, col="grey70", alpha=0.8) +
-  geom_line(aes(Year, median)) +
-  geom_ribbon(aes(Year, ymin=q0.025, ymax=q0.975, fill=HostOrder), alpha=0.25) +
-  theme_minimal() +
-  facet_wrap(~HostSpecies, scales="free_y") +
-  #ggtitle(Hmisc::capitalize(daty$Host[1])) +
-  ylab(expression(lambda)) +
-  xlab("Year") +
-  theme(plot.title=element_text(size=14, hjust=0.5),
-        axis.title.y = element_text(size=14),
-        axis.title.x = element_text(size=12),
-        axis.text = element_text(size=11))
+# 1. proportion of species with strong evidence of +ve or -ve trend
+fixed$pos = fixed$q0.025 > 0
+fixed$neg = fixed$q0.975 < 0
+fixed$flat = fixed$pos == FALSE & fixed$neg == FALSE
 
-ggplot(curve_preds[ curve_preds$model == 1960 & curve_preds$HostSpecies %in% unique(curve_preds$HostSpecies)[1:60], ]) +
-  #geom_point(aes(Year, Discovered), size=1, col="grey70", alpha=0.8) +
-  geom_line(aes(Year, median)) +
-  geom_ribbon(aes(Year, ymin=q0.025, ymax=q0.975, fill=HostOrder), alpha=0.25) +
-  theme_minimal() +
-  facet_wrap(~HostSpecies, scales="free_y") +
-  #ggtitle(Hmisc::capitalize(daty$Host[1])) +
-  ylab(expression(lambda)) +
-  xlab("Year") +
-  theme(plot.title=element_text(size=14, hjust=0.5),
-        axis.title.y = element_text(size=14),
-        axis.title.x = element_text(size=12),
-        axis.text = element_text(size=11))
+# across all wild species
+resx = fixed[ fixed$param == "yearx" & fixed$Domestic == "Wild", ] %>%
+  dplyr::group_by(model) %>%
+  dplyr::summarise(Increasing = sum(pos) / length(pos),
+                   Flat = sum(flat) / length(flat),
+                   Decreasing = sum(neg) / length(neg))
 
-# 
-# ggplot(curve_preds[ curve_preds$model == 1960, ]) +
-#   geom_point(aes(Year, Discovered), size=1, col="grey70", alpha=0.8) +
-#   geom_line(aes(Year, median)) +
-#   geom_ribbon(aes(Year, ymin=q0.025, ymax=q0.975, fill=HostOrder), alpha=0.25) +
-#   theme_minimal() +
-#   facet_wrap(~HostOrder) +
-#   #ggtitle(Hmisc::capitalize(daty$Host[1])) +
-#   ylab(expression(lambda)) +
-#   xlab("Year") +
-#   theme(plot.title=element_text(size=14, hjust=0.5),
-#         axis.title.y = element_text(size=14),
-#         axis.title.x = element_text(size=12),
-#         axis.text = element_text(size=11))
-# 
-ggplot(curve_preds[ curve_preds$model == 1990 & curve_preds$HostSpecies %in% unique(curve_preds$HostSpecies)[1:40], ]) +
-  #geom_point(aes(Year, Discovered), size=1, col="grey70", alpha=0.8) +
-  geom_line(aes(Year, median)) +
-  geom_ribbon(aes(Year, ymin=q0.025, ymax=q0.975, fill=HostOrder), alpha=0.25) +
-  theme_minimal() +
-  facet_wrap(~HostSpecies, scales="free_y") +
-  #ggtitle(Hmisc::capitalize(daty$Host[1])) +
-  ylab("Viral discovery rate (viruses/year)") +
-  xlab("Year") +
-  theme(plot.title=element_text(size=14, hjust=0.5),
-        axis.title.y = element_text(size=14),
-        axis.title.x = element_text(size=12),
-        axis.text = element_text(size=11))
+# split by order
+resy = fixed[ fixed$param == "yearx" & fixed$Domestic == "Wild", ] %>%
+  dplyr::group_by(model, HostOrder) %>%
+  dplyr::summarise(Increasing = sum(pos) / length(pos),
+                   Flat = sum(flat) / length(flat),
+                   Decreasing = sum(neg) / length(neg))
 
-curve_preds$model2 = paste(curve_preds$model, "-2012", sep="")
-p1 = ggplot(curve_preds[ curve_preds$model %in% c(1930, 1960) & curve_preds$HostSpecies %in% unique(curve_preds$HostSpecies)[1:60], ]) +
-  geom_point(aes(Year, Discovered), size=1, col="grey70", alpha=0.8) +
-  geom_line(aes(Year, median, group=factor(model2))) +
-  geom_ribbon(aes(Year, ymin=q0.025, ymax=q0.975, fill=factor(model2)), alpha=0.3) +
-  theme_minimal() +
-  facet_wrap(~HostSpecies, scales="free_y") +
-  scale_fill_viridis_d( name="Time epoch", begin=0.2, end=0.7) +
-  #ggtitle(Hmisc::capitalize(daty$Host[1])) +
-  #ylab(expression(lambda)) +
-  ylab("Viral discovery rate (viruses/year)") +
-  xlab("Year") +
-  theme(plot.title=element_text(size=14, hjust=0.5),
-        axis.title.y = element_text(size=12),
-        axis.title.x = element_text(size=11),
-        legend.title = element_text(size=12), 
-        strip.text = element_text(size=13), 
-        legend.text = element_text(size=11), 
-        axis.text = element_text(size=11))
-
-
+# visualisation of fixed effects
 fixed$model2 = paste(fixed$model, "-2012", sep="")
 fixed = fixed[ fixed$median > -10, ]
 fixed = fixed[ fixed$q0.025>-10, ]
-#ggplot(fixed[ fixed$param %in% c("yearx") & fixed$model != "2000", ]) + 
-ggplot(fixed[ fixed$param %in% c("yearx"), ]) + 
-  #geom_point(aes(HostOrder, median, group=HostSpecies), alpha=0.1, position=position_dodge(width=0.2)) +
-  geom_linerange(aes(HostOrder, ymin=q0.025, ymax=q0.975, group=HostSpecies, col=factor(HostOrder)), position=position_dodge(width=0.8)) + 
-  geom_hline(yintercept=0, lty=2) + 
+fixed = fixed[ fixed$q0.975< 2, ]
+#ggplot(fixed[ fixed$param %in% c("yearx") & fixed$model != "2000", ]) +
+ggplot(fixed[ fixed$param %in% c("yearx"), ]) +
+  geom_linerange(aes(HostOrder, ymin=q0.025, ymax=q0.975, group=HostSpecies, col=factor(HostOrder)), position=position_dodge(width=0.8)) +
+  geom_hline(yintercept=0, lty=2) +
   theme_minimal() +
-  facet_wrap(~model2, scales="free_y") +
+  facet_wrap(~model2, scales="free_y", nrow=3) +
   scale_color_viridis_d( name="Order", begin=0.2, end=0.7) +
   theme(legend.position = "none",
         plot.title=element_text(size=14, hjust=0.5),
@@ -284,52 +238,39 @@ ggplot(fixed[ fixed$param %in% c("yearx"), ]) +
         axis.text.y = element_text(size=11),
         axis.text.x = element_text(size=11, angle=90))
 
-fixed$sig_pos = fixed$q0.025 > 0
-fixed$sig_neg = fixed$q0.975 < 0
-fixed$non_sig = fixed$sig_pos == FALSE & fixed$sig_neg == FALSE
-resx = fixed[ fixed$param == "yearx", ] %>%
-  dplyr::group_by(model2, HostOrder) %>%
-  dplyr::summarise(Increasing = sum(sig_pos) / length(sig_pos),
-                   Flat = sum(non_sig) / length(non_sig),
-                   Decreasing = sum(sig_neg) / length(sig_neg))
-
-
-
-
-# is there a negative correlation between trend in recent years and overall richness? (i.e. are species with more viruses decreasing?)
+# is there evidence that species with more known viruses are more likely to be decreasing trends?
 fcor = fixed %>%
   dplyr::filter(param == "yearx" & model == "1990") %>%
   dplyr::filter(median > -10) %>%
   left_join(curves[ !duplicated(curves$HostSpecies), c("HostSpecies", "VRichness")])
 
 # pretty much no relationship between slope and total richness
-ggplot(fcor[ fcor$Domestic == "Wild" & fcor$HostSpecies != "homo sapiens", ]) + 
-  geom_point(aes(VRichness, median, group=HostSpecies), position=position_dodge(width=0.1), alpha=0.25) + 
-  geom_linerange(aes(VRichness, ymin=q0.025, ymax=q0.975, group=HostSpecies), position=position_dodge(width=0.1), alpha=0.25) + 
-  geom_hline(yintercept=0, lty=2) + 
+ggplot(fcor[ fcor$Domestic == "Wild" & fcor$HostSpecies != "homo sapiens" & fcor$flat == FALSE, ]) +
+  geom_point(aes(VRichness, median, group=HostSpecies), position=position_dodge(width=0.1), alpha=0.25) +
+  geom_linerange(aes(VRichness, ymin=q0.025, ymax=q0.975, group=HostSpecies), position=position_dodge(width=0.1), alpha=0.25) +
+  geom_hline(yintercept=0, lty=2) +
   theme_minimal()
 
-cor(fcor$median, fcor$VRichness)
 
 
 
 
+# ====================== 3. Analysis of stability of relative viral richness estimates over time ===========================
 
+# 1. Order-level comparison of mean viral richness across species
 
-
-# ======================= How stable are ranks of species and order level viral richness over time? ============================
-
-# 1. Order level comparison of rank of mean viral richness
-
+# mean viral richness across species within each order
 getOrderVRich = function(year){
   resx = curves %>%
     dplyr::filter(Year <= year) %>%
     dplyr::filter(HostSpecies != "homo sapiens") %>%
+    dplyr::filter(Domestic == "Wild") %>%
     dplyr::group_by(HostSpecies) %>%
     dplyr::summarise(VRich = sum(Discovered),
                      HostOrder = head(HostOrder, 1)) %>%
     dplyr::group_by(HostOrder) %>%
     dplyr::summarise(VRich_Mean = mean(VRich),
+                     VRich_Median = median(VRich),
                      VRich_SEM = plotrix::std.error(VRich)) %>%
     dplyr::arrange(desc(VRich_Mean)) %>%
     dplyr::mutate(Year = year)
@@ -338,96 +279,140 @@ getOrderVRich = function(year){
 ord_over_time = do.call(rbind.data.frame, lapply(seq(1960, 2015, by=5), getOrderVRich))
 oot = reshape2::dcast(ord_over_time[ , c("HostOrder", "Year", "VRich_Mean")], HostOrder ~ Year, value.var="VRich_Mean")
 
-# calculate spearman coefficient over time
-corx = function(x){ cor(oot$`2015`, x, method="spearman") }
-spearman_o = as.data.frame(apply(oot[ , 2:ncol(oot)], 2, corx))
-spearman_o$Year = row.names(spearman_o)
-names(spearman_o)[1] = "SpearmanRho"
+# calculate spearman rank correlation between 2015 and all other years (examine temporal decay)
+cor_rho = function(x){ return( as.vector(cor.test(oot$`2015`, x, method="spearman")$estimate) ) }
+stab1 = as.data.frame(apply(oot[ , 2:ncol(oot)], 2, cor_rho)) %>%
+  rename("rho" = 1) %>%
+  dplyr::mutate(year = seq(1960, 2015, by=5),
+                model = "Order")
 
-ggplot(spearman_o) + 
-  geom_point(aes(Year, SpearmanRho)) +
-  geom_line(aes(Year, SpearmanRho))
 
-# ggplot(disc_beta_time[ disc_beta_time$HostOrder %in% t1$HostOrder[ 1:15], ]) +
-#   geom_point(aes(Year, VRich_Mean, group=HostOrder, col=HostOrder), size=1.5, position=position_dodge(width=5)) +
-#   geom_line(aes(Year, VRich_Mean, group=HostOrder, col=HostOrder), position=position_dodge(width=5)) +
-#   geom_linerange(aes(Year, ymin=VRich_Mean - VRich_SEM, ymax = VRich_Mean + VRich_SEM, group=HostOrder, col=HostOrder), position=position_dodge(width=5))
-#   
+# 2. Family-level comparison of mean viral richness across species
 
-# =========== at the species level ===============
+# mean viral richness across species within each order
+getFamilyVRich = function(year){
+  resx = curves %>%
+    dplyr::filter(Year <= year) %>%
+    dplyr::filter(HostSpecies != "homo sapiens") %>%
+    dplyr::filter(Domestic == "Wild") %>%
+    dplyr::group_by(HostSpecies) %>%
+    dplyr::summarise(VRich = sum(Discovered),
+                     HostFamily = head(HostFamily, 1),
+                     HostOrder = head(HostOrder, 1)) %>%
+    dplyr::group_by(HostFamily) %>%
+    dplyr::summarise(VRich_Mean = mean(VRich),
+                     VRich_Median = median(VRich),
+                     VRich_SEM = plotrix::std.error(VRich),
+                     HostOrder = head(HostOrder, 1)) %>%
+    dplyr::arrange(desc(VRich_Mean)) %>%
+    dplyr::mutate(Year = year)
+  return(resx)
+}
+fam_over_time = do.call(rbind.data.frame, lapply(seq(1960, 2015, by=5), getFamilyVRich))
+fot = reshape2::dcast(fam_over_time[ , c("HostFamily", "Year", "VRich_Mean")], HostFamily ~ Year, value.var="VRich_Mean")
+
+# calculate spearman rank correlation between 2015 and all other years (examine temporal decay)
+cor_rho = function(x){ return( as.vector(cor.test(fot$`2015`, x, method="spearman")$estimate) ) }
+stab2 = as.data.frame(apply(fot[ , 2:ncol(fot)], 2, cor_rho)) %>%
+  rename("rho" = 1) %>%
+  dplyr::mutate(year = seq(1960, 2015, by=5),
+                model = "Family")
+
+ggplot(rbind(stab1, stab2)) +
+  geom_line(aes(year, rho, col=model)) +
+  geom_point(aes(year, rho, col=model))
+
+
+# 3. Species-level comparison of ranking of viral richness across years
 
 # diversity estimates in 5 year increments
 getSpeciesVRich = function(year){
   resx = curves %>%
     dplyr::filter(Year <= year) %>%
     dplyr::filter(HostSpecies != "homo sapiens") %>%
+    dplyr::filter(Domestic == "Wild") %>%
     dplyr::group_by(HostSpecies) %>%
     dplyr::summarise(VRich = sum(Discovered),
                      HostOrder = head(HostOrder, 1),
-                     Domestic = head(Domestic, 1)) %>%
+                     Domestic = head(Domestic, 1),
+                     Pubs = sum(NumPubs, na.rm=TRUE),
+                     VRich_2015 = head(VRichness, 1)) %>%
     dplyr::mutate(Year = year)
   return(resx)
 }
 rich_over_time = do.call(rbind.data.frame, lapply(seq(1960, 2015, by=5), getSpeciesVRich))
-rot = rich_over_time[ rich_over_time$Domestic == "Wild", ]
-
-# ggplot(rot[ rot$HostOrder == "Rodentia", ]) + 
-#   geom_point(aes(Year, VRich, group=HostSpecies, col=HostSpecies)) + 
-#   geom_line(aes(Year, VRich, group=HostSpecies, col=HostSpecies)) + 
-#   theme(legend.position = "none")
-# 
-# oo = "Carnivora"
-# px = ggplot(rot[ rot$HostOrder == oo, ]) + 
-#   geom_point(aes(Year, VRich, group=HostSpecies, col=HostSpecies)) + 
-#   geom_line(aes(Year, VRich, group=HostSpecies, col=HostSpecies)) + 
-#   theme_minimal() +
-#   theme(legend.position = "none") + 
-#   ylab("Viral richness") + 
-#   ggtitle(paste(oo, " (", n_distinct(rot$HostSpecies[ rot$HostOrder == oo ]), " species)", sep=""))
-# ggsave(px, "./output/figures/Carnivora_spaghetti.png", device="png", )
 
 # over time
 rot2 = reshape2::dcast(rich_over_time[ , c("HostSpecies", "Year", "VRich")], HostSpecies ~ Year, value.var="VRich") %>%
-  left_join(rich_over_time[ !duplicated(rich_over_time$HostSpecies), c("HostSpecies", "HostOrder") ])
+  left_join(rich_over_time[ !duplicated(rich_over_time$HostSpecies), c("HostSpecies", "HostOrder", "VRich_2015") ])
 
 # run for all orders
 result = data.frame()
 orders = c("Carnivora", "Chiroptera", "Cetartiodactyla", "Lagomorpha", "Perissodactyla", "Primates", "Rodentia", "Diprotodontia", "Didelphimorphia")
-for(i in 1:(length(orders)+1)){
+for(i in 1:(length(orders)+2)){
 
   if(i == 1){ 
     datx = rot2
-    orderx = "Mammalia"
-  } else{
-    orderx = orders[i-1]
-    datx = rot2[ rot2$HostOrder == orderx, ]
-  }
+    orderx = "Species"
+  } else if(i == 2){
+      datx = rot2[ rot2$VRich_2015 >= 5, ]
+      orderx = "Species (>5)"
+    } else{
+      orderx = orders[i-2]
+      datx = rot2[ rot2$HostOrder == orderx, ]
+    }
   
   # run 
-  corx = function(x){ cor(datx$`2015`, x, method="spearman") }
-  resx = as.data.frame(apply(datx[ , 2:(ncol(datx)-1)], 2, corx)) %>%
+  cor_rho = function(x){ return( as.vector(cor.test(datx$`2015`, x, method="spearman")$estimate) ) }
+  resx = as.data.frame(apply(datx[ , 2:(ncol(datx)-2)], 2, cor_rho)) %>%
     rename("rho" = 1) %>%
-    dplyr::mutate(Order = orderx)
-  resx$Year = seq(1960, 2015, by=5)
+    dplyr::mutate(model = orderx)
+  resx$year = seq(1960, 2015, by=5)
   result = rbind(result, resx)
 }
 
-#
-result$Order = factor(result$Order, levels=c("Mammalia", orders), ordered=TRUE)
-p0 = ggplot(result) + 
-  geom_point(aes(Year, rho), size=0.75) +
-  geom_line(aes(Year, rho), col="darkred") + 
-  facet_wrap(~Order, nrow=2) +
+# stab3 
+stab3 = result
+
+
+# ==================== combine all results ======================
+
+stab_agg = do.call(rbind.data.frame, list(stab1, stab2, stab3[ grep("Species", stab3$model), ]))
+stab_orders = stab3[ !grepl("Species", stab3$model), ]
+
+# plots
+ss = stab_agg[ stab_agg$model != "Species (>5)", ]
+ss$model = factor(ss$model, levels=c("Order", "Family", "Species"), ordered=TRUE)
+p1 = ggplot(ss) + 
+  geom_line(aes(year, rho, col=model), size=1) + 
+  ylim(0, 1) + 
+  scale_color_viridis_d(begin=0, end=0.8) +
   theme_minimal() + 
-  geom_vline(xintercept=2015, lty=2) +
-  scale_x_reverse() +
-  ylab("Spearman rho (rank correlation)")
-ggsave(p0, file="./output/figures/Order_viralrichnessranks_temporaldecay.png", device="png", dpi=300, height=4.5, width=10, units="in")
+  geom_vline(xintercept=2015, lty=2) + 
+  ylab("Spearman rho (rank correlation)") + 
+  xlab("Year") + 
+  theme(legend.title = element_blank(), 
+        axis.title = element_text(size=13),
+        axis.text = element_text(size=11),
+        panel.grid.minor = element_blank(),
+        legend.text = element_text(size=12),
+        legend.position = c(0.2, 0.9))
+p2 = ggplot(stab_orders) + 
+  geom_line(aes(year, rho, col=model), size=1) + 
+  ylim(0, 1) + 
+  scale_color_viridis_d(begin=0, end=0.8) +
+  facet_wrap(~model) + 
+  theme_minimal() + 
+  theme(legend.position="none",
+        strip.text = element_text(size=12),
+        axis.title.x = element_text(size=13),
+        panel.grid.minor = element_blank(),
+        axis.text = element_text(size=11),
+        axis.title.y = element_blank()) + 
+  geom_vline(xintercept=2015, lty=2) + 
+  ylab("Spearman rho (rank correlation)") + 
+  xlab("Year")
 
-
-# ggplot(rich_over_time) + geom_abline() + geom_point(aes(`2010`, `2015`), size=2, alpha=0.35, col="skyblue4") + theme_minimal()
-# ggplot(rich_over_time) + geom_abline() + geom_point(aes(`2000`, `2015`), size=2, alpha=0.35, col="skyblue4") + theme_minimal()
-# ggplot(rich_over_time) + geom_abline() + geom_point(aes(`1990`, `2015`), size=2, alpha=0.35, col="skyblue4") + theme_minimal()
-# ggplot(rich_over_time) + geom_abline() + geom_point(aes(`1980`, `2015`), size=2, alpha=0.35, col="skyblue4") + theme_minimal()
-# ggplot(rich_over_time) + geom_abline() + geom_point(aes(`1970`, `2015`), size=2, alpha=0.35, col="skyblue4") + theme_minimal()
-# ggplot(rich_over_time) + geom_abline() + geom_point(aes(`1960`, `2015`), size=2, alpha=0.35, col="skyblue4") + theme_minimal()
+p_comb = gridExtra::grid.arrange(p1, p2, nrow=1)
+ggsave(p_comb, file="./output/figures/TemporalDecayFigure.png", device="png", dpi=600, units="in", width=12, height=6)
+  
