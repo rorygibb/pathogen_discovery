@@ -2,7 +2,7 @@
 # ============= Scrape NCBI databases for EID2 publication details inc. year ============
 
 # dependencies and basedir
-setwd("C:/Users/roryj/Documents/PhD/202008_pathogendiversity_rarefaction/")
+setwd("C:/Users/roryj/Documents/PhD/202008_pathogendiscovery/")
 pacman::p_load("RISmed", "dplyr", "magrittr")
 
 
@@ -11,8 +11,7 @@ pacman::p_load("RISmed", "dplyr", "magrittr")
 # ================ load data and prepare for PubMed query =================
 
 # eid2 for mammals
-eid2 = read.csv("./data/host_pathogen_2020/data/hostparasitedb_raw/EID2/Wardehetal_2015_EID2/SpeciesInteractions_EID2.csv", stringsAsFactors = FALSE) %>%
-  dplyr::filter(Carrier.classification %in% c("Human", "Mammal", "Domestic", "Primate", "Rodent", "Aves"))
+eid2 = read.csv("./data/host_pathogen_2020/data/hostparasitedb_raw/EID2/Wardehetal_2015_EID2/SpeciesInteractions_EID2.csv", stringsAsFactors = FALSE)
 
 # EID2 data with PMIDs (stored in 'Publications' column)
 # 'database' field corresponds to exact name of db in NCBI databases (used to lookup relevant db)
@@ -27,6 +26,7 @@ nuc = eid2[ eid2$Sequences != "", -which(names(eid2) == "Publications")] %>%
   tidyr::separate_rows(Sequences, sep=";") %>%
   dplyr::rename("id" = Sequences)
 nuc$Database = "nuccore"
+write.csv(nuc, "./output/data_processed/EID2_NucleotideRecords.csv", row.names=FALSE)
 
 # combine into dataframe to query (147,000 unique ids)
 query_df = rbind(pm, nuc)
