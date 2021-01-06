@@ -36,105 +36,313 @@ data("wrld_simpl")
 
 
 
-# ============= for each time epoch starting in 1960 create rasters of geographical virus diversity =============
+
+# ============= map unique host-virus combinations discovered over time =============
 
 # template raster
 tras = raster("./data/rasters/wc2.1_5m_elev/wc2.1_5m_elev.tif")
 tras = aggregate(tras, fact=10)
 
-# plot to generate maps of viral diversity
-# saves to output folder
-virusHostDiversityRasters = function(epoch, output_dir){
+# plot to generate maps of viral discoveries
+virusDiscoveryMap = function(data, startyear, endyear, criteria="all"){
   
-  # all known pathogens by specified year
-  dd = assoc[ assoc$Year <= epoch & !is.na(assoc$Year), ]
-  
-  # path_stack
-  path_stack = stack()
-  
-  # create raster of host richness per pathogen per epoch
-  for(path_name in unique(dd$Virus)){
-    
-    cat(paste(path_name, "...", sep=""))
-    dx = dd[ dd$Virus == path_name, ]
-    
-    iucnx = iucn %>%
-      dplyr::filter(binomial %in% dx$Host) %>%
-      #dplyr::summarise(geometry = sf::st_union(geometry)) %>%
-      dplyr::mutate(Virus = path_name,
-                    dummy = 1)
-    #return(iucnx)
-    
-    if(nrow(iucnx) == 0){ next }
-    
-    #plot(iucnx$geometry)
-    rx = fasterize::fasterize(iucnx, tras, field="dummy", fun='sum')
-    names(rx) = paste(path_name, "HostRichness", epoch, sep="_")
-    path_stack = stack(path_stack, rx)
-    
+  if(criteria == "detection_isolation"){
+    uu = data[ data$DetectionMethod != "Antibodies", ]
+  } else if(criteria == "isolation"){
+    uu = data[ data$DetectionMethod == "Isolation/Observation", ]
+  }  else{
+    uu = data
   }
-  writeRaster(path_stack, filename=paste(output_dir, names(path_stack), ".tif", sep=""), bylayer=TRUE, format="GTiff", overwrite=TRUE)
-  return(path_stack)
+  
+  # unique_combinations with first year
+  uu = uu %>%
+    group_by(Host, Virus) %>%
+    dplyr::summarise(Year = min(Year, na.rm=TRUE)) %>%
+    dplyr::filter(!is.na(Year))
+  
+  # all known pathogens by specified year and summarise by host (how many discovered)
+  dx = uu[ uu$Year >= startyear & uu$Year <= endyear, ] %>%
+    dplyr::group_by(Host) %>%
+    dplyr::summarise(VirDisc = n_distinct(Virus))
+  
+  # combine with iucn
+  iucnx = iucn %>%
+    dplyr::filter(binomial %in% dx$Host) %>%
+    #dplyr::summarise(geometry = sf::st_union(geometry)) %>%
+    dplyr::left_join(dx, by=c("binomial" = "Host"))
+  
+  # rasterize
+  rx = fasterize::fasterize(iucnx, tras, field="VirDisc", fun='sum')
+  names(rx) = paste("UniqueHostVirusCombinations", startyear, endyear, sep="_")
+  return(rx)
 }
 
-# create wildlife virus diversity maps across time epochs
-output_dir = "./output/virus_rasters/"
-vdiv_1960 = virusHostDiversityRasters(epoch = 1960, output_dir=output_dir)
-vdiv_1970 = virusHostDiversityRasters(epoch = 1970, output_dir=output_dir)
-vdiv_1980 = virusHostDiversityRasters(epoch = 1980, output_dir=output_dir)
-vdiv_1990 = virusHostDiversityRasters(epoch = 1990, output_dir=output_dir)
-vdiv_2000 = virusHostDiversityRasters(epoch = 2000, output_dir=output_dir)
-vdiv_2010 = virusHostDiversityRasters(epoch = 2010, output_dir=output_dir)
+# create maps for serology
+d1 = virusDiscoveryMap(data=assoc, startyear=1950, endyear=1970)
+d2 = virusDiscoveryMap(data=assoc, startyear=1970, endyear=1980)
+d3 = virusDiscoveryMap(data=assoc, startyear=1980, endyear=1990)
+d4 = virusDiscoveryMap(data=assoc, startyear=1990, endyear=2000)
+d5 = virusDiscoveryMap(data=assoc, startyear=2000, endyear=2005)
+d6 = virusDiscoveryMap(data=assoc, startyear=2005, endyear=2010)
+discovery = stack(d1, d2, d3, d4, d5, d6)
 
-# combine into summary maps of total viral richness
-div_1960 = raster::calc(vdiv_1960, function(x) sum(x > 0 & !is.na(x))); names(div_1960) = "VRichness_1960"
-div_1970 = raster::calc(vdiv_1970, function(x) sum(x > 0 & !is.na(x))); names(div_1970) = "VRichness_1970"
-div_1980 = raster::calc(vdiv_1980, function(x) sum(x > 0 & !is.na(x))); names(div_1980) = "VRichness_1980"
-div_1990 = raster::calc(vdiv_1990, function(x) sum(x > 0 & !is.na(x))); names(div_1990) = "VRichness_1990"
-div_2000 = raster::calc(vdiv_2000, function(x) sum(x > 0 & !is.na(x))); names(div_2000) = "VRichness_2000"
-div_2010 = raster::calc(vdiv_2010, function(x) sum(x > 0 & !is.na(x))); names(div_2010) = "VRichness_2010"
-
-ss = stack(div_1960, div_1970, div_1980, div_1990, div_2000, div_2010)
-rr = as.data.frame(ss, xy=TRUE) %>%
+# combine
+rr = as.data.frame(discovery, xy=TRUE) %>%
   reshape2::melt(id.vars =1:2) %>%
-  dplyr::mutate(year = unlist(lapply(strsplit(as.vector(variable), "_"), "[", 2)))
-data("wrld_simpl")
+  dplyr::mutate(startyear = unlist(lapply(strsplit(as.vector(variable), "_"), "[", 2)),
+                endyear = unlist(lapply(strsplit(as.vector(variable), "_"), "[", 3)),
+                facet = paste(startyear, endyear, sep="-"))
 ww = st_as_sf(wrld_simpl)
 rr$value[ rr$value == 0] = NA
 
-pb = ggplot() + 
+plot_sero = ggplot() + 
   geom_raster(data = rr, aes(x, y, fill=value)) +
-  geom_sf(data=ww[ ww$NAME != "Antarctica", ], fill=NA, col="grey50", alpha=0.25) +
-  facet_wrap(~year) + 
+  geom_sf(data=ww[ ww$NAME != "Antarctica", ], fill=NA, col="grey50", alpha=0.25, size=0.25) +
+  facet_wrap(~facet) + 
   scale_fill_viridis_c(option="magma", direction=-1, na.value="white") + 
   theme_minimal() + xlab("") + ylab("") + 
-  ggtitle("Total viral richness") + 
+  ggtitle("Novel host-virus associations reported (serology, PCR or isolation)") + 
   theme(plot.title=element_text(size=14, hjust=0.5), legend.title = element_blank())
+ggsave(plot_sero, file="./output/figures/PathogenDiscovery_byyear_serology.png", device="png", units="in", width=15, height=8, dpi=600)
 
-# changes in decades
-d1 = div_1970 - div_1960
-d2 = div_1980 - div_1970
-d3 = div_1990 - div_1980
-d4 = div_2000 - div_1990
-d5 = div_2010 - div_2000
-changes = stack(d1, d2, d3, d4, d5)
-names(changes) = c("d1960-1970", "d1970-1980", "d1980-1990", "d1990-2000", "d2000-2010")
 
-rr = as.data.frame(changes, xy=TRUE) %>%
+# create maps for isolation
+d1 = virusDiscoveryMap(data=assoc, startyear=1950, endyear=1970, criteria = "strict")
+d2 = virusDiscoveryMap(data=assoc, startyear=1970, endyear=1980, criteria = "strict")
+d3 = virusDiscoveryMap(data=assoc, startyear=1980, endyear=1990, criteria = "strict")
+d4 = virusDiscoveryMap(data=assoc, startyear=1990, endyear=2000, criteria = "strict")
+d5 = virusDiscoveryMap(data=assoc, startyear=2000, endyear=2005, criteria = "strict")
+d6 = virusDiscoveryMap(data=assoc, startyear=2005, endyear=2010, criteria = "strict")
+discovery = stack(d1, d2, d3, d4, d5, d6)
+
+# combine
+rr = as.data.frame(discovery, xy=TRUE) %>%
   reshape2::melt(id.vars =1:2) %>%
-  dplyr::mutate(variable = substr(variable, 2, 50))
-data("wrld_simpl")
+  dplyr::mutate(startyear = unlist(lapply(strsplit(as.vector(variable), "_"), "[", 2)),
+                endyear = unlist(lapply(strsplit(as.vector(variable), "_"), "[", 3)),
+                facet = paste(startyear, endyear, sep="-"))
 ww = st_as_sf(wrld_simpl)
 rr$value[ rr$value == 0] = NA
 
-pb = ggplot() + 
+plot_strict = ggplot() + 
   geom_raster(data = rr, aes(x, y, fill=value)) +
-  geom_sf(data=ww[ ww$NAME != "Antarctica", ], fill=NA, col="grey50", alpha=0.25) +
-  facet_wrap(~variable) + 
+  geom_sf(data=ww[ ww$NAME != "Antarctica", ], fill=NA, col="grey50", alpha=0.25, size=0.25) +
+  facet_wrap(~facet) + 
   scale_fill_viridis_c(option="magma", direction=-1, na.value="white") + 
   theme_minimal() + xlab("") + ylab("") + 
-  ggtitle("Viruses discovered") + 
+  ggtitle("Novel host-virus associations reported (PCR or isolation)") + 
   theme(plot.title=element_text(size=14, hjust=0.5), legend.title = element_blank())
+ggsave(plot_strict, file="./output/figures/PathogenDiscovery_byyear_strict.png", device="png", units="in", width=15, height=8, dpi=600)
+
+
+# create maps for isolation
+d1 = virusDiscoveryMap(data=assoc, startyear=1950, endyear=1970, criteria = "isolation")
+d2 = virusDiscoveryMap(data=assoc, startyear=1970, endyear=1980, criteria = "isolation")
+d3 = virusDiscoveryMap(data=assoc, startyear=1980, endyear=1990, criteria = "isolation")
+d4 = virusDiscoveryMap(data=assoc, startyear=1990, endyear=2000, criteria = "isolation")
+d5 = virusDiscoveryMap(data=assoc, startyear=2000, endyear=2005, criteria = "isolation")
+d6 = virusDiscoveryMap(data=assoc, startyear=2005, endyear=2010, criteria = "isolation")
+discovery = stack(d1, d2, d3, d4, d5, d6)
+
+# combine
+rr = as.data.frame(discovery, xy=TRUE) %>%
+  reshape2::melt(id.vars =1:2) %>%
+  dplyr::mutate(startyear = unlist(lapply(strsplit(as.vector(variable), "_"), "[", 2)),
+                endyear = unlist(lapply(strsplit(as.vector(variable), "_"), "[", 3)),
+                facet = paste(startyear, endyear, sep="-"))
+ww = st_as_sf(wrld_simpl)
+rr$value[ rr$value == 0] = NA
+
+plot_strict = ggplot() + 
+  geom_raster(data = rr, aes(x, y, fill=value)) +
+  geom_sf(data=ww[ ww$NAME != "Antarctica", ], fill=NA, col="grey50", alpha=0.25, size=0.25) +
+  facet_wrap(~facet) + 
+  scale_fill_viridis_c(option="magma", direction=-1, na.value="white") + 
+  theme_minimal() + xlab("") + ylab("") + 
+  ggtitle("Novel host-virus associations reported (Isolation)") + 
+  theme(plot.title=element_text(size=14, hjust=0.5), legend.title = element_blank())
+ggsave(plot_strict, file="./output/figures/PathogenDiscovery_byyear_isolation.png", device="png", units="in", width=15, height=8, dpi=600)
+
+
+
+
+### for filoviruses
+
+dat = assoc[ assoc$VirusOrder == "Bunyavirales", ]
+
+# create maps for isolation
+d1 = virusDiscoveryMap(data = dat, startyear=1950, endyear=1980, criteria = "strict")
+d2 = virusDiscoveryMap(data = dat, startyear=1980, endyear=1990, criteria = "strict")
+d3 = virusDiscoveryMap(data = dat, startyear=1990, endyear=2000, criteria = "strict")
+d4 = virusDiscoveryMap(data = dat, startyear=2000, endyear=2005, criteria = "strict")
+d5 = virusDiscoveryMap(data = dat, startyear=2005, endyear=2010, criteria = "strict")
+discovery = stack(d1, d2, d3, d4, d5)
+
+# combine
+rr = as.data.frame(discovery, xy=TRUE) %>%
+  reshape2::melt(id.vars =1:2) %>%
+  dplyr::mutate(startyear = unlist(lapply(strsplit(as.vector(variable), "_"), "[", 2)),
+                endyear = unlist(lapply(strsplit(as.vector(variable), "_"), "[", 3)),
+                facet = paste(startyear, endyear, sep="-"))
+ww = st_as_sf(wrld_simpl)
+rr$value[ rr$value == 0] = NA
+
+pp = ggplot() + 
+  geom_raster(data = rr, aes(x, y, fill=value)) +
+  geom_sf(data=ww[ ww$NAME != "Antarctica", ], fill=NA, col="grey50", alpha=0.25, size=0.1) +
+  facet_wrap(~facet) + 
+  scale_fill_viridis_c(option="magma", direction=-1, na.value="white") + 
+  theme_minimal() + xlab("") + ylab("") + 
+  ggtitle("Bunyavirus-host associations reported") + 
+  theme(plot.title=element_text(size=14, hjust=0.5), legend.title = element_blank())
+
+
+
+
+
+
+
+
+# for betacoronaviruses
+
+hh = assoc[ assoc$VirusGenus == "Betacoronavirus", ] %>%
+  dplyr::select(Host, Year) %>%
+  distinct()
+bc = read.csv("./code/pathogen_discovery/data/BetaCoV_hosts_Dec2020.csv", stringsAsFactors = FALSE) %>%
+  dplyr::select(1:2) %>%
+  dplyr::rename("Host" = 1, "Year" = 2)
+hh = rbind(hh, bc)
+
+betacov_stack = stack()
+for(yy in seq(1996, 2020, by=3)){
+  
+  hy = hh[ hh$Year <= yy, ]
+  iucnx = iucn %>%
+    dplyr::filter(binomial %in% hy$Host) %>%
+    dplyr::mutate(dummy = 1)
+  rx = fasterize::fasterize(iucnx, tras, field="dummy", fun='sum')
+  names(rx) = yy
+  betacov_stack = stack(betacov_stack, rx)
+}
+
+rr = as.data.frame(betacov_stack, xy=TRUE) %>%
+  reshape2::melt(id.vars =1:2) %>%
+  dplyr::mutate(year = substr(variable, 2, 30))
+
+data("wrld_simpl")
+ww = st_as_sf(wrld_simpl)
+
+pb = ggplot() +
+  geom_raster(data = rr, aes(x, y, fill=value)) +
+  geom_sf(data=ww[ ww$NAME != "Antarctica", ], fill=NA, col="grey50", alpha=0.25) +
+  facet_wrap(~year) +
+  scale_fill_viridis_c(option="magma", direction=-1, na.value="white") +
+  theme_minimal() + xlab("") + ylab("") +
+  ggtitle("Betacoronavirus host richness") +
+  theme(plot.title=element_text(size=14, hjust=0.5), legend.title = element_blank())
+ggsave(pb, file="./output/figures/BetaCoV_hosts_byyear.png", device="png", units="in", width=15, height=12, dpi=600)
+
+
+
+# # ============= for each time epoch starting in 1960 create rasters of geographical virus diversity =============
+# 
+# # template raster
+# tras = raster("./data/rasters/wc2.1_5m_elev/wc2.1_5m_elev.tif")
+# tras = aggregate(tras, fact=10)
+# 
+# # plot to generate maps of viral diversity
+# # saves to output folder
+# virusHostDiversityRasters = function(epoch, output_dir){
+#   
+#   # all known pathogens by specified year
+#   dd = assoc[ assoc$Year <= epoch & !is.na(assoc$Year), ]
+#   
+#   # path_stack
+#   path_stack = stack()
+#   
+#   # create raster of host richness per pathogen per epoch
+#   for(path_name in unique(dd$Virus)){
+#     
+#     cat(paste(path_name, "...", sep=""))
+#     dx = dd[ dd$Virus == path_name, ]
+#     
+#     iucnx = iucn %>%
+#       dplyr::filter(binomial %in% dx$Host) %>%
+#       #dplyr::summarise(geometry = sf::st_union(geometry)) %>%
+#       dplyr::mutate(Virus = path_name,
+#                     dummy = 1)
+#     #return(iucnx)
+#     
+#     if(nrow(iucnx) == 0){ next }
+#     
+#     #plot(iucnx$geometry)
+#     rx = fasterize::fasterize(iucnx, tras, field="dummy", fun='sum')
+#     names(rx) = paste(path_name, "HostRichness", epoch, sep="_")
+#     path_stack = stack(path_stack, rx)
+#     
+#   }
+#   writeRaster(path_stack, filename=paste(output_dir, names(path_stack), ".tif", sep=""), bylayer=TRUE, format="GTiff", overwrite=TRUE)
+#   return(path_stack)
+# }
+# 
+# # create wildlife virus diversity maps across time epochs
+# output_dir = "./output/virus_rasters/"
+# vdiv_1960 = virusHostDiversityRasters(epoch = 1960, output_dir=output_dir)
+# vdiv_1970 = virusHostDiversityRasters(epoch = 1970, output_dir=output_dir)
+# vdiv_1980 = virusHostDiversityRasters(epoch = 1980, output_dir=output_dir)
+# vdiv_1990 = virusHostDiversityRasters(epoch = 1990, output_dir=output_dir)
+# vdiv_2000 = virusHostDiversityRasters(epoch = 2000, output_dir=output_dir)
+# vdiv_2010 = virusHostDiversityRasters(epoch = 2010, output_dir=output_dir)
+# 
+# # combine into summary maps of total viral richness
+# div_1960 = raster::calc(vdiv_1960, function(x) sum(x > 0 & !is.na(x))); names(div_1960) = "VRichness_1960"
+# div_1970 = raster::calc(vdiv_1970, function(x) sum(x > 0 & !is.na(x))); names(div_1970) = "VRichness_1970"
+# div_1980 = raster::calc(vdiv_1980, function(x) sum(x > 0 & !is.na(x))); names(div_1980) = "VRichness_1980"
+# div_1990 = raster::calc(vdiv_1990, function(x) sum(x > 0 & !is.na(x))); names(div_1990) = "VRichness_1990"
+# div_2000 = raster::calc(vdiv_2000, function(x) sum(x > 0 & !is.na(x))); names(div_2000) = "VRichness_2000"
+# div_2010 = raster::calc(vdiv_2010, function(x) sum(x > 0 & !is.na(x))); names(div_2010) = "VRichness_2010"
+# 
+# ss = stack(div_1960, div_1970, div_1980, div_1990, div_2000, div_2010)
+# rr = as.data.frame(ss, xy=TRUE) %>%
+#   reshape2::melt(id.vars =1:2) %>%
+#   dplyr::mutate(year = unlist(lapply(strsplit(as.vector(variable), "_"), "[", 2)))
+# data("wrld_simpl")
+# ww = st_as_sf(wrld_simpl)
+# rr$value[ rr$value == 0] = NA
+# 
+# pb = ggplot() + 
+#   geom_raster(data = rr, aes(x, y, fill=value)) +
+#   geom_sf(data=ww[ ww$NAME != "Antarctica", ], fill=NA, col="grey50", alpha=0.25) +
+#   facet_wrap(~year) + 
+#   scale_fill_viridis_c(option="magma", direction=-1, na.value="white") + 
+#   theme_minimal() + xlab("") + ylab("") + 
+#   ggtitle("Total viral richness") + 
+#   theme(plot.title=element_text(size=14, hjust=0.5), legend.title = element_blank())
+# 
+# # changes in decades
+# d1 = div_1970 - div_1960
+# d2 = div_1980 - div_1970
+# d3 = div_1990 - div_1980
+# d4 = div_2000 - div_1990
+# d5 = div_2010 - div_2000
+# changes = stack(d1, d2, d3, d4, d5)
+# names(changes) = c("d1960-1970", "d1970-1980", "d1980-1990", "d1990-2000", "d2000-2010")
+# 
+# rr = as.data.frame(changes, xy=TRUE) %>%
+#   reshape2::melt(id.vars =1:2) %>%
+#   dplyr::mutate(variable = substr(variable, 2, 50))
+# data("wrld_simpl")
+# ww = st_as_sf(wrld_simpl)
+# rr$value[ rr$value == 0] = NA
+# 
+# pb = ggplot() + 
+#   geom_raster(data = rr, aes(x, y, fill=value)) +
+#   geom_sf(data=ww[ ww$NAME != "Antarctica", ], fill=NA, col="grey50", alpha=0.25) +
+#   facet_wrap(~variable) + 
+#   scale_fill_viridis_c(option="magma", direction=-1, na.value="white") + 
+#   theme_minimal() + xlab("") + ylab("") + 
+#   ggtitle("Viruses discovered") + 
+#   theme(plot.title=element_text(size=14, hjust=0.5), legend.title = element_blank())
 
 
 
@@ -198,101 +406,6 @@ pb = ggplot() +
 
 
 
-
-# ============= map unique host-virus combinations discovered over time =============
-
-# template raster
-tras = raster("./data/rasters/wc2.1_5m_elev/wc2.1_5m_elev.tif")
-tras = aggregate(tras, fact=10)
-
-# plot to generate maps of viral discoveries
-virusDiscoveryMap = function(startyear, endyear, criteria="all"){
-  
-  if(criteria == "strict"){
-    uu = assoc[ assoc$DetectionMethod != "Antibodies", ]
-  } else{
-    uu = assoc
-  }
-  
-  # unique_combinations with first year
-  uu = uu %>%
-    group_by(Host, Virus) %>%
-    dplyr::summarise(Year = min(Year, na.rm=TRUE)) %>%
-    dplyr::filter(!is.na(Year))
-  
-  # all known pathogens by specified year and summarise by host (how many discovered)
-  dx = uu[ uu$Year >= startyear & uu$Year <= endyear, ] %>%
-    dplyr::group_by(Host) %>%
-    dplyr::summarise(VirDisc = n_distinct(Virus))
-  
-  # combine with iucn
-  iucnx = iucn %>%
-    dplyr::filter(binomial %in% dx$Host) %>%
-    #dplyr::summarise(geometry = sf::st_union(geometry)) %>%
-    dplyr::left_join(dx, by=c("binomial" = "Host"))
-  
-  # rasterize
-  rx = fasterize::fasterize(iucnx, tras, field="VirDisc", fun='sum')
-  names(rx) = paste("UniqueHostVirusCombinations", startyear, endyear, sep="_")
-  return(rx)
-}
-
-# create maps for serology
-d1 = virusDiscoveryMap(startyear=1950, endyear=1970)
-d2 = virusDiscoveryMap(startyear=1970, endyear=1980)
-d3 = virusDiscoveryMap(startyear=1980, endyear=1990)
-d4 = virusDiscoveryMap(startyear=1990, endyear=2000)
-d5 = virusDiscoveryMap(startyear=2000, endyear=2005)
-d6 = virusDiscoveryMap(startyear=2005, endyear=2010)
-discovery = stack(d1, d2, d3, d4, d5, d6)
-
-# combine
-rr = as.data.frame(discovery, xy=TRUE) %>%
-  reshape2::melt(id.vars =1:2) %>%
-  dplyr::mutate(startyear = unlist(lapply(strsplit(as.vector(variable), "_"), "[", 2)),
-                endyear = unlist(lapply(strsplit(as.vector(variable), "_"), "[", 3)),
-                facet = paste(startyear, endyear, sep="-"))
-ww = st_as_sf(wrld_simpl)
-rr$value[ rr$value == 0] = NA
-
-plot_sero = ggplot() + 
-  geom_raster(data = rr, aes(x, y, fill=value)) +
-  geom_sf(data=ww[ ww$NAME != "Antarctica", ], fill=NA, col="grey50", alpha=0.25, size=0.25) +
-  facet_wrap(~facet) + 
-  scale_fill_viridis_c(option="magma", direction=-1, na.value="white") + 
-  theme_minimal() + xlab("") + ylab("") + 
-  ggtitle("Novel host-virus associations reported (serology, PCR or isolation)") + 
-  theme(plot.title=element_text(size=14, hjust=0.5), legend.title = element_blank())
-ggsave(plot_sero, file="./output/figures/PathogenDiscovery_byyear_serology.png", device="png", units="in", width=15, height=8, dpi=600)
-
-
-# create maps for isolation
-d1 = virusDiscoveryMap(startyear=1950, endyear=1970, criteria = "strict")
-d2 = virusDiscoveryMap(startyear=1970, endyear=1980, criteria = "strict")
-d3 = virusDiscoveryMap(startyear=1980, endyear=1990, criteria = "strict")
-d4 = virusDiscoveryMap(startyear=1990, endyear=2000, criteria = "strict")
-d5 = virusDiscoveryMap(startyear=2000, endyear=2005, criteria = "strict")
-d6 = virusDiscoveryMap(startyear=2005, endyear=2010, criteria = "strict")
-discovery = stack(d1, d2, d3, d4, d5, d6)
-
-# combine
-rr = as.data.frame(discovery, xy=TRUE) %>%
-  reshape2::melt(id.vars =1:2) %>%
-  dplyr::mutate(startyear = unlist(lapply(strsplit(as.vector(variable), "_"), "[", 2)),
-                endyear = unlist(lapply(strsplit(as.vector(variable), "_"), "[", 3)),
-                facet = paste(startyear, endyear, sep="-"))
-ww = st_as_sf(wrld_simpl)
-rr$value[ rr$value == 0] = NA
-
-plot_strict = ggplot() + 
-  geom_raster(data = rr, aes(x, y, fill=value)) +
-  geom_sf(data=ww[ ww$NAME != "Antarctica", ], fill=NA, col="grey50", alpha=0.25, size=0.25) +
-  facet_wrap(~facet) + 
-  scale_fill_viridis_c(option="magma", direction=-1, na.value="white") + 
-  theme_minimal() + xlab("") + ylab("") + 
-  ggtitle("Novel host-virus associations reported (PCR or isolation)") + 
-  theme(plot.title=element_text(size=14, hjust=0.5), legend.title = element_blank())
-ggsave(plot_strict, file="./output/figures/PathogenDiscovery_byyear_strict.png", device="png", units="in", width=15, height=8, dpi=600)
 
 
 
