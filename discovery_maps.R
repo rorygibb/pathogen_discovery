@@ -1,6 +1,6 @@
 
 
-# ====================== Mapping temporal changes in pathogen discovery over space =====================
+# ====================== Temporal changes in pathogen discovery over space and time =====================
 
 # match host records to IUCN range maps in CLOVER
 
@@ -9,21 +9,17 @@
 setwd("C:/Users/roryj/Documents/PhD/202008_pathogendiscovery/")
 pacman::p_load("dplyr", "magrittr", "stringr", "ggplot2", "inlabru", "INLA", "raster", "sf", "maptools")
 
+# domestic species to label
+domestic = read.csv("./code/pathogen_discovery/data/clover/domestic_status/HostLookup_Domestic.csv", stringsAsFactors = FALSE)
+
 # associations data and no humans
-assoc = read.csv("./data/clover_v1/Clover_v1.0_NBCIreconciled_20201211.csv", stringsAsFactors = FALSE) %>%
-  #dplyr::filter(Database != "EID2") %>%
-  dplyr::filter(YearType != "Nucleotide") %>%
-  dplyr::filter(Host != "Homo sapiens") %>%
-  dplyr::filter(DetectionMethod != "Not specified") 
-
-# label domestics
-load("./data/domestic/domestic_species.R")
-domestic = Hmisc::capitalize(c(domestic, "canis familiaris", "bos frontalis", "bos grunniens", "bos grunniens mutus", "Bos taurus indicus", "Bos taurus primigenius"))
-assoc$Domestic = ifelse(assoc$Host %in% domestic, "Domestic", "Wild")
-
-# remove domestics
-assoc = assoc[ assoc$Domestic == "Wild", ]
-assoc = assoc[ assoc$Host_Original != "Canis lupus familiaris", ]
+clover = read.csv("./code/pathogen_discovery/data/clover/Clover_v1.0_NBCIreconciled_20201218.csv", stringsAsFactors = FALSE) %>%
+  #dplyr::filter(Host != "Homo sapiens") %>%
+  dplyr::mutate(Domestic = ifelse(Host %in% domestic$Host, TRUE, FALSE)) %>%
+  dplyr::filter(DetectionMethod != "Not specified") %>%
+  #dplyr::filter(Domestic == FALSE) %>%
+  dplyr::filter(!is.na(Year)) %>%
+  dplyr::filter(Year <= 2010)
 
 # iucn ranges: 950 full matches
 iucn = sf::st_read("./data/iucn_range/mammals_terrestrial/MAMMALS_TERRESTRIAL_ONLY.shp")
@@ -35,6 +31,103 @@ data("wrld_simpl")
 
 
 
+# ============= graph changes in discovery over time ================
+
+dat = clover %>%
+  group_by(DetectionMethod, Host, Virus) %>%
+  dplyr::summarise(Year = min(Year), 
+                   hv = paste(unique(Host), unique(Virus), collapse=", ")) %>%
+  dplyr::arrange(Host, Virus) %>%
+  dplyr::group_by(DetectionMethod, Year) %>%
+  dplyr::summarise(Discovered = n_distinct(hv)) %>%
+  dplyr::group_by(DetectionMethod) %>%
+  dplyr::mutate(CumDiscovered = cumsum(Discovered))
+
+# melt
+dat = reshape2::melt(dat, id.vars=1:2)
+dat$variable = as.vector(dat$variable)
+dat$variable[ dat$variable == "Discovered" ] = "Novel host-virus associations"
+dat$variable[ dat$variable == "CumDiscovered" ] = "Cumulative associations"
+dat$variable = factor(dat$variable, levels = c("Novel host-virus associations", "Cumulative associations"), ordered=TRUE)
+dat = rename(dat, "Method" = DetectionMethod)
+
+p0 = ggplot(dat) + 
+  geom_line(aes(Year, value, group=Method, col=Method), size=0.9) + 
+  theme_classic() +
+  #theme(legend.position=c(0.2, 0.9)) +
+  ylab("Number of associations") +
+  facet_wrap(~variable, nrow=2, scales="free_y") +
+  #theme(legend.position="bottom") +
+  scale_x_continuous(breaks=seq(1930, 2020, by=20), labels=seq(1930, 2020, by=20)) +
+  scale_color_viridis_d(begin=0, end=0.85, option="viridis", direction=-1) +
+  theme(legend.title = element_blank(),
+        legend.text = element_text(size=12),
+        strip.background = element_blank(), 
+        axis.title = element_text(size=13), 
+        strip.text = element_text(size=13),
+        #strip.text = element_blank(),
+        axis.text = element_text(size=12))
+
+ggsave(p0, file="./output/figures/VirusDiscovery_Trends.png", device="png", units="in", width=7, height=7, dpi=600, scale=0.9)
+
+
+# full composite
+
+p0 = ggplot(dat) + 
+  geom_line(aes(Year, value, group=Method, col=Method), size=0.9) + 
+  theme_classic() +
+  #theme(legend.position=c(0.2, 0.9)) +
+  ylab("Novel host-virus associations reported") +
+  facet_wrap(~variable, nrow=2, scales="free_y") +
+  theme(legend.position="none") +
+  scale_x_continuous(breaks=seq(1930, 2020, by=20), labels=seq(1930, 2020, by=20)) +
+  scale_color_viridis_d(begin=0, end=0.85, option="viridis", direction=-1) +
+  theme(legend.title = element_blank(),
+        legend.text = element_text(size=12),
+        strip.background = element_blank(), 
+        axis.title = element_text(size=13), 
+        strip.text = element_text(size=13),
+        axis.title.x = element_blank(),
+        axis.text = element_text(size=12))
+
+# virus and host overall
+dx = clover %>%
+  group_by(Virus) %>%
+  dplyr::summarise(Year = min(Year)) %>%
+  dplyr::arrange(Virus) %>%
+  dplyr::group_by(Year) %>%
+  dplyr::summarise(Discovered = n_distinct(Virus)) %>%
+  dplyr::mutate(Cumulative = cumsum(Discovered),
+                Type = "Viruses")
+dy = clover %>%
+  group_by(Host) %>%
+  dplyr::summarise(Year = min(Year)) %>%
+  dplyr::arrange(Host) %>%
+  dplyr::group_by(Year) %>%
+  dplyr::summarise(Discovered = n_distinct(Host)) %>%
+  dplyr::mutate(Cumulative = cumsum(Discovered),
+                Type = "Hosts")
+dat = rbind(dx, dy)
+
+p1 = ggplot(dat) + 
+  geom_line(aes(Year, Cumulative, group=Type), size=0.9, col="darkred") + 
+  theme_classic() +
+  #theme(legend.position=c(0.2, 0.9)) +
+  ylab("Cumulative species") +
+  facet_wrap(~Type, nrow=2, scales="free_y") +
+  #theme(legend.position="bottom") +
+  scale_x_continuous(breaks=seq(1930, 2020, by=20), labels=seq(1930, 2020, by=20)) +
+  #scale_color_viridis_d(begin=0, end=0.85, option="viridis", direction=-1) +
+  theme(legend.title = element_blank(),
+        legend.text = element_text(size=12),
+        strip.background = element_blank(), 
+        axis.title = element_text(size=13), 
+        strip.text = element_text(size=13),
+        #strip.text = element_blank(),
+        axis.text = element_text(size=12))
+
+p_composite = gridExtra::grid.arrange(p0, p1, nrow=2, heights=c(1, 0.5))
+ggsave(p_composite, file="./output/figures/VirusDiscovery_Trends_composite.png", device="png", units="in", width=5, height=9, dpi=600, scale=0.8)
 
 
 # ============= map unique host-virus combinations discovered over time =============
@@ -46,7 +139,7 @@ tras = aggregate(tras, fact=10)
 # plot to generate maps of viral discoveries
 virusDiscoveryMap = function(data, startyear, endyear, criteria="all"){
   
-  if(criteria == "detection_isolation"){
+  if(criteria == "pcr_isolation"){
     uu = data[ data$DetectionMethod != "Antibodies", ]
   } else if(criteria == "isolation"){
     uu = data[ data$DetectionMethod == "Isolation/Observation", ]
@@ -77,13 +170,16 @@ virusDiscoveryMap = function(data, startyear, endyear, criteria="all"){
   return(rx)
 }
 
-# create maps for serology
-d1 = virusDiscoveryMap(data=assoc, startyear=1950, endyear=1970)
-d2 = virusDiscoveryMap(data=assoc, startyear=1970, endyear=1980)
-d3 = virusDiscoveryMap(data=assoc, startyear=1980, endyear=1990)
-d4 = virusDiscoveryMap(data=assoc, startyear=1990, endyear=2000)
-d5 = virusDiscoveryMap(data=assoc, startyear=2000, endyear=2005)
-d6 = virusDiscoveryMap(data=assoc, startyear=2005, endyear=2010)
+
+# ====================== partition style 1 ============================
+
+# create maps for all criteria
+d1 = virusDiscoveryMap(data=clover, startyear=1950, endyear=1970)
+d2 = virusDiscoveryMap(data=clover, startyear=1971, endyear=1980)
+d3 = virusDiscoveryMap(data=clover, startyear=1981, endyear=1990)
+d4 = virusDiscoveryMap(data=clover, startyear=1991, endyear=2000)
+d5 = virusDiscoveryMap(data=clover, startyear=2001, endyear=2005)
+d6 = virusDiscoveryMap(data=clover, startyear=2006, endyear=2010)
 discovery = stack(d1, d2, d3, d4, d5, d6)
 
 # combine
@@ -107,12 +203,12 @@ ggsave(plot_sero, file="./output/figures/PathogenDiscovery_byyear_serology.png",
 
 
 # create maps for isolation
-d1 = virusDiscoveryMap(data=assoc, startyear=1950, endyear=1970, criteria = "strict")
-d2 = virusDiscoveryMap(data=assoc, startyear=1970, endyear=1980, criteria = "strict")
-d3 = virusDiscoveryMap(data=assoc, startyear=1980, endyear=1990, criteria = "strict")
-d4 = virusDiscoveryMap(data=assoc, startyear=1990, endyear=2000, criteria = "strict")
-d5 = virusDiscoveryMap(data=assoc, startyear=2000, endyear=2005, criteria = "strict")
-d6 = virusDiscoveryMap(data=assoc, startyear=2005, endyear=2010, criteria = "strict")
+d1 = virusDiscoveryMap(data=clover, startyear=1950, endyear=1970, criteria = "pcr_isolation")
+d2 = virusDiscoveryMap(data=clover, startyear=1971, endyear=1980, criteria = "pcr_isolation")
+d3 = virusDiscoveryMap(data=clover, startyear=1981, endyear=1990, criteria = "pcr_isolation")
+d4 = virusDiscoveryMap(data=clover, startyear=1991, endyear=2000, criteria = "pcr_isolation")
+d5 = virusDiscoveryMap(data=clover, startyear=2001, endyear=2005, criteria = "pcr_isolation")
+d6 = virusDiscoveryMap(data=clover, startyear=2006, endyear=2010, criteria = "pcr_isolation")
 discovery = stack(d1, d2, d3, d4, d5, d6)
 
 # combine
@@ -131,17 +227,53 @@ plot_strict = ggplot() +
   scale_fill_viridis_c(option="magma", direction=-1, na.value="white") + 
   theme_minimal() + xlab("") + ylab("") + 
   ggtitle("Novel host-virus associations reported (PCR or isolation)") + 
-  theme(plot.title=element_text(size=14, hjust=0.5), legend.title = element_blank())
+  theme(plot.title=element_text(size=16, hjust=0.5), legend.title = element_blank(),
+        strip.text = element_text(size=13.5))
 ggsave(plot_strict, file="./output/figures/PathogenDiscovery_byyear_strict.png", device="png", units="in", width=15, height=8, dpi=600)
 
 
+
+
+# ====================== partition style 2: decades ============================
+
+# create maps for all criteria
+d1 = virusDiscoveryMap(data=clover, startyear=1930, endyear=1950)
+d2 = virusDiscoveryMap(data=clover, startyear=1951, endyear=1970)
+d3 = virusDiscoveryMap(data=clover, startyear=1971, endyear=1980)
+d4 = virusDiscoveryMap(data=clover, startyear=1981, endyear=1990)
+d5 = virusDiscoveryMap(data=clover, startyear=1991, endyear=2000)
+d6 = virusDiscoveryMap(data=clover, startyear=2001, endyear=2010)
+discovery = stack(d1, d2, d3, d4, d5, d6)
+
+# combine
+rr = as.data.frame(discovery, xy=TRUE) %>%
+  reshape2::melt(id.vars =1:2) %>%
+  dplyr::mutate(startyear = unlist(lapply(strsplit(as.vector(variable), "_"), "[", 2)),
+                endyear = unlist(lapply(strsplit(as.vector(variable), "_"), "[", 3)),
+                facet = paste(startyear, endyear, sep="-"))
+ww = st_as_sf(wrld_simpl)
+rr$value[ rr$value == 0] = NA
+
+plot_sero = ggplot() + 
+  geom_raster(data = rr, aes(x, y, fill=value)) +
+  geom_sf(data=ww[ ww$NAME != "Antarctica", ], fill=NA, col="grey50", alpha=0.25, size=0.25) +
+  facet_wrap(~facet) + 
+  scale_fill_viridis_c(option="magma", direction=-1, na.value="white") + 
+  theme_minimal() + xlab("") + ylab("") + 
+  ggtitle("Novel host-virus associations reported (serology, PCR or isolation)") + 
+  theme(plot.title=element_text(size=16, hjust=0.5), legend.title = element_blank(),
+        strip.text = element_text(size=15),
+        legend.text = element_text(size=12))
+ggsave(plot_sero, file="./output/figures/PathogenDiscovery_byyear_allcriteria_decades.png", device="png", units="in", width=14, height=7, dpi=600, scale=0.9)
+
+
 # create maps for isolation
-d1 = virusDiscoveryMap(data=assoc, startyear=1950, endyear=1970, criteria = "isolation")
-d2 = virusDiscoveryMap(data=assoc, startyear=1970, endyear=1980, criteria = "isolation")
-d3 = virusDiscoveryMap(data=assoc, startyear=1980, endyear=1990, criteria = "isolation")
-d4 = virusDiscoveryMap(data=assoc, startyear=1990, endyear=2000, criteria = "isolation")
-d5 = virusDiscoveryMap(data=assoc, startyear=2000, endyear=2005, criteria = "isolation")
-d6 = virusDiscoveryMap(data=assoc, startyear=2005, endyear=2010, criteria = "isolation")
+d1 = virusDiscoveryMap(data=clover, startyear=1930, endyear=1950, criteria = "pcr_isolation")
+d2 = virusDiscoveryMap(data=clover, startyear=1951, endyear=1970, criteria = "pcr_isolation")
+d3 = virusDiscoveryMap(data=clover, startyear=1971, endyear=1980, criteria = "pcr_isolation")
+d4 = virusDiscoveryMap(data=clover, startyear=1981, endyear=1990, criteria = "pcr_isolation")
+d5 = virusDiscoveryMap(data=clover, startyear=1991, endyear=2000, criteria = "pcr_isolation")
+d6 = virusDiscoveryMap(data=clover, startyear=2001, endyear=2010, criteria = "pcr_isolation")
 discovery = stack(d1, d2, d3, d4, d5, d6)
 
 # combine
@@ -159,9 +291,29 @@ plot_strict = ggplot() +
   facet_wrap(~facet) + 
   scale_fill_viridis_c(option="magma", direction=-1, na.value="white") + 
   theme_minimal() + xlab("") + ylab("") + 
-  ggtitle("Novel host-virus associations reported (Isolation)") + 
-  theme(plot.title=element_text(size=14, hjust=0.5), legend.title = element_blank())
-ggsave(plot_strict, file="./output/figures/PathogenDiscovery_byyear_isolation.png", device="png", units="in", width=15, height=8, dpi=600)
+  ggtitle("Novel host-virus associations reported (PCR or isolation)") + 
+  theme(plot.title=element_text(size=16, hjust=0.5), legend.title = element_blank(),
+        strip.text = element_text(size=15),
+        legend.text = element_text(size=12))
+ggsave(plot_strict, file="./output/figures/PathogenDiscovery_byyear_strict_decades.png", device="png", units="in", width=14, height=7, dpi=600, scale=0.9)
+
+
+plot_strict2 = ggplot() + 
+  geom_raster(data = rr, aes(x, y, fill=value)) +
+  geom_sf(data=ww[ ww$NAME != "Antarctica", ], fill=NA, col="grey50", alpha=0.25, size=0.25) +
+  facet_wrap(~facet, ncol=2) + 
+  scale_fill_viridis_c(option="magma", direction=-1, na.value="white") + 
+  theme_minimal() + xlab("") + ylab("") + 
+  ggtitle("Novel host-virus associations reported (PCR or isolation)") + 
+  theme(plot.title=element_text(size=16, hjust=0.5), legend.title = element_blank(),
+        strip.text = element_text(size=15),
+        legend.text = element_text(size=12))
+ggsave(plot_strict2, file="./output/figures/PathogenDiscovery_byyear_strict_decades_vertical.png", device="png", units="in", width=10, height=9, dpi=600, scale=0.9)
+
+
+
+
+
 
 
 
