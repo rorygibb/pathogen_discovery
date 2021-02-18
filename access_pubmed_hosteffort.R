@@ -5,7 +5,7 @@
 # root dir and dependencies
 # dependencies and basedir
 setwd("C:/Users/roryj/Documents/PhD/202008_pathogendiversity_rarefaction/")
-pacman::p_load("dplyr", "magrittr", "stringr", "ggplot2", "RISmed")
+pacman::p_load("dplyr", "magrittr", "stringr", "ggplot2", "RISmed", "taxize")
 
 # full harmoniesd associations database (EID2, GMPD2, HP3)
 dd = read.csv("./output/data_processed/hostpathogen_harmonised/AllDatabases_Associations_Hosts_Harmonised_Oct2020.csv", stringsAsFactors = FALSE)
@@ -26,7 +26,7 @@ spp = dd[ !duplicated(dd$Host_Harmonised), ] %>%
 library(RISmed)
 
 # function to scrape pubmed results
-getPubMedYears = function(species_binomial){
+getPubMedYears = function(species_binomial, taxid_search = FALSE){
   
   # print species name
   print(sprintf("Processing: %s", species_binomial))
@@ -36,22 +36,44 @@ getPubMedYears = function(species_binomial){
   sppx = str_trim(c(datx$Host_Harmonised[1], datx$HostSynonyms[ datx$HostSynonyms != ""]))
   sppx = strsplit(sppx, " ")
   sppx = sppx[ which(unlist(lapply(sppx, length)) < 3) ]
-  createSearchTerm = function(x){ paste("(", x[1], " [TIAB] AND ", x[2], " [TIAB])", sep="") }
-  search_term = paste(unlist(lapply(sppx, createSearchTerm)), collapse=" OR ")
+  
+  if (!taxid_search) {
+    # Search by name(s)
+    createSearchTerm = function(x){ paste("(", x[1], " [TIAB] AND ", x[2], " [TIAB])", sep="") }
+    search_term = paste(unlist(lapply(sppx, createSearchTerm)), collapse=" OR ")
+    search_db = "pubmed"
+  } else {
+    # Search by taxid
+    taxonomy_id = taxize::get_uid(species_binomial, rank_query = "species", 
+                                  ask = FALSE, messages = FALSE)
+    
+    if (attr(taxonomy_id, "multiple_matches"))
+      warning("Multiple names matched for ", species_binomial, ", returning NA")
+    
+    if (attr(taxonomy_id, "pattern_match")) {
+      # Don't want partial matches
+      warning("Partial match for", species_binomial, ", returning NA")
+      taxonomy_id = NA_character_
+    }
+    
+    search_term = paste0("txid", taxonomy_id,"[Organism:exp]") # Papers mentioning this species or any subspecies
+    search_db = "PMC"  # This query only works on Pubmed Central
+  }
+  
   
   # create pubmed search term
   #search_term = paste(strsplit(species_binomial," ")[[1]][1], "[TIAB]", "AND", strsplit(species_binomial," ")[[1]][2], "[TIAB]", sep=" ")
   
   # run searches: firstly to get number of publications, then set this as retmax to ensure all are returned 
   e = simpleError("test error")
-  search1 = tryCatch(RISmed::EUtilsSummary(search_term, type="esearch", db="pubmed", datetype='pdat', mindate=1950, maxdate=2020), error=function(e) e)
+  search1 = tryCatch(RISmed::EUtilsSummary(search_term, type="esearch", db=search_db, datetype='pdat', mindate=1950, maxdate=2020), error=function(e) e)
   if(class(search1)[1] == "simpleError"){ return(data.frame(Year=NA, NumPubs=NA, Host = species_binomial, Note="Lookup error")) }
   numpubs_total = RISmed::QueryCount(search1)
   if(numpubs_total == 0){ return(data.frame(Year=2018, NumPubs=0, Host = species_binomial, Note="No publications")) }
   
   # second search with numpubs_total set as max
   Sys.sleep(0.5)
-  search2 = tryCatch(RISmed::EUtilsSummary(search_term, type="esearch", db="pubmed", datetype='pdat', mindate=1950, maxdate=2020, retmax=numpubs_total), error=function(e) e)
+  search2 = tryCatch(RISmed::EUtilsSummary(search_term, type="esearch", db=search_db, datetype='pdat', mindate=1950, maxdate=2020, retmax=numpubs_total), error=function(e) e)
   Sys.sleep(0.5)
   if(class(search2)[1] == "simpleError"){ return(data.frame(Year=NA, NumPubs=NA, Host = species_binomial, Note="Lookup error")) }
   
