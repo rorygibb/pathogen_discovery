@@ -121,8 +121,9 @@ source(dest2)
 result = data.frame()
 
 # specify data for inclusion
-model = "all"
-model = "domestic"
+#model = "all"
+#model = "domestic"
+model = "wild"
 
 if(model=="all"){
   datax = curves_all
@@ -248,7 +249,7 @@ for(i in 1:length(orders)){
 r2 = result
 r2$Order = factor(r2$Order, levels=fac_order, ordered=TRUE)
 r2$signif_col = NA
-r2$signif_col[ r2$sig_incr == TRUE ] = "Increase";
+r2$signif_col[ r2$sig_incr == TRUE ] = "Increase"
 r2$signif_col[ r2$sig_incr == FALSE ] = "Decrease"
 
 #raw_data = curvesw[ curvesw$HostOrder %in% r2$Order & curvesw$Domestic == FALSE & curvesw$Year <= 2010, ]
@@ -260,7 +261,8 @@ curve_plot = ggplot() +
   #geom_ribbon(data=r2[ -which(r2$Year < 1960 & r2$Order %in% c("Perissodactyla")), ], aes(x=Year, ymin=lower, ymax=upper), alpha=0.3, fill="grey50", col=NA, size=0.05) +
   geom_ribbon(data=r2, aes(x=Year, ymin=lower, ymax=upper), alpha=0.25, fill="skyblue4", col=NA, size=0.05) +
   geom_point(data=raw_data, aes(x=Year, y=Discovered), col="grey55", size=0.3) +
-  geom_line(data=r2, aes(x=Year, y=fitted, group=Order, col=sig), size=1.2) +
+  geom_line(data=r2, aes(x=Year, y=fitted, group=Order, col=sig_incr), size=1.2) +
+  geom_line(data=r2[ r2$sig_decr == TRUE, ], aes(x=Year, y=fitted, group=Order), color="red", size=1.2) +
   theme_classic() +
   scale_color_viridis_d(begin=0.25, end=0.75) +
   lemon::facet_rep_wrap(~Order, ncol=2, scales="free_y", strip.position = "top") +
@@ -280,100 +282,100 @@ ggsave(curve_plot, file="./output/figures/MS_Figure1_OrderGAMs.png", device="png
 
 
 
-
-ggplot(preds) +
-  geom_line(aes(Year, fitted, group=Order, col=sig)) +
-  geom_ribbon(aes(Year, ymin=lower, ymax=upper), alpha=0.2, fill="skyblue4")
-  
-
-
-
-# ### example
-# library(mgcv)
 # 
-# dd = curvesw[ curvesw$HostOrder == "Chiroptera" & curvesw$Domestic == FALSE & curvesw$Year <= 2010, ]
-# m1 = gam(Discovered ~ s(Year), family="poisson", data=dd, method="ML")
-# #m2 = gam(Discovered ~ s(Year), data = dd, correlation = corARMA(form = ~ Year, p = 1))
-# 
-# #hist((dd$Discovered - m1$fitted.values) / sqrt(m1$fitted.values), 20)
-# 
-# # output = confint(m1, parm="s(Year)", level=0.95, transform=TRUE, type="confidence")
-# # ggplot(output) + 
-# #   geom_line(aes(Year, est)) +
-# #   geom_ribbon(aes(Year, ymin=lower, ymax=upper), alpha=0.2, fill="skyblue4") +
-# #   geom_point(data = dd, aes(Year, Discovered))
+# ggplot(preds) +
+#   geom_line(aes(Year, fitted, group=Order, col=sig)) +
+#   geom_ribbon(aes(Year, ymin=lower, ymax=upper), alpha=0.2, fill="skyblue4")
 #   
 # 
-# plot.gam(m1, residuals = TRUE, pch = 19, cex = 0.75)
-# summary(m1)
-# hist(resid(m1), 20)
 # 
-# # calculates first derivative and identifies periods of statistically significant change in slope
-# m1.d = Deriv(m1, n=length(dd$Year))
-# plot(m1.d, sizer = TRUE, alpha = 0.01)
 # 
-# # plot
-# preds = data.frame(Year = dd$Year)
-# preds = cbind(preds, predict(m1, preds, type = "link", se.fit = TRUE))
-# preds$upper = exp(preds$fit + (1.96*preds$se.fit))
-# preds$lower = exp(preds$fit - (1.96*preds$se.fit))
-# preds$fitted = exp(preds$fit)
+# # ### example
+# # library(mgcv)
+# # 
+# # dd = curvesw[ curvesw$HostOrder == "Chiroptera" & curvesw$Domestic == FALSE & curvesw$Year <= 2010, ]
+# # m1 = gam(Discovered ~ s(Year), family="poisson", data=dd, method="ML")
+# # #m2 = gam(Discovered ~ s(Year), data = dd, correlation = corARMA(form = ~ Year, p = 1))
+# # 
+# # #hist((dd$Discovered - m1$fitted.values) / sqrt(m1$fitted.values), 20)
+# # 
+# # # output = confint(m1, parm="s(Year)", level=0.95, transform=TRUE, type="confidence")
+# # # ggplot(output) + 
+# # #   geom_line(aes(Year, est)) +
+# # #   geom_ribbon(aes(Year, ymin=lower, ymax=upper), alpha=0.2, fill="skyblue4") +
+# # #   geom_point(data = dd, aes(Year, Discovered))
+# #   
+# # 
+# # plot.gam(m1, residuals = TRUE, pch = 19, cex = 0.75)
+# # summary(m1)
+# # hist(resid(m1), 20)
+# # 
+# # # calculates first derivative and identifies periods of statistically significant change in slope
+# # m1.d = Deriv(m1, n=length(dd$Year))
+# # plot(m1.d, sizer = TRUE, alpha = 0.01)
+# # 
+# # # plot
+# # preds = data.frame(Year = dd$Year)
+# # preds = cbind(preds, predict(m1, preds, type = "link", se.fit = TRUE))
+# # preds$upper = exp(preds$fit + (1.96*preds$se.fit))
+# # preds$lower = exp(preds$fit - (1.96*preds$se.fit))
+# # preds$fitted = exp(preds$fit)
+# # 
+# # # denote significant change
+# # CI <- confint(m1.d, alpha = 0.01)
+# # S <- signifD(preds$fit, m1.d$Year$deriv, CI$Year$upper, CI$Year$lower,
+# #              eval = 0)
+# # preds$sig = !is.na(S$incr) | !is.na(S$decr)
+# # preds$all = 1
+# # ggplot() +
+# #   geom_line(data=preds, aes(Year, fitted, color=sig, group=all), size=1) + 
+# #   scale_colour_viridis_d(option="viridis", begin=0.2, end=0.8) +
+# #   geom_ribbon(data=preds, aes(Year, ymin=lower, ymax=upper), alpha=0.2, fill="skyblue4") +
+# #   geom_point(data = dd, aes(Year, Discovered)) +
+# #   theme_classic() +
+# #   ylab("Viral discovery rate (viruses/year)") 
 # 
-# # denote significant change
-# CI <- confint(m1.d, alpha = 0.01)
-# S <- signifD(preds$fit, m1.d$Year$deriv, CI$Year$upper, CI$Year$lower,
-#              eval = 0)
-# preds$sig = !is.na(S$incr) | !is.na(S$decr)
-# preds$all = 1
-# ggplot() +
-#   geom_line(data=preds, aes(Year, fitted, color=sig, group=all), size=1) + 
-#   scale_colour_viridis_d(option="viridis", begin=0.2, end=0.8) +
-#   geom_ribbon(data=preds, aes(Year, ymin=lower, ymax=upper), alpha=0.2, fill="skyblue4") +
-#   geom_point(data = dd, aes(Year, Discovered)) +
+# 
+# 
+# 
+# 
+# # ============== facetted plot ===============]
+# 
+# r2 = result
+# r2$Order = factor(r2$Order, levels=c("Cetartiodactyla", "Rodentia", "Primates", "Carnivora", "Chiroptera", "Perissodactyla", "Lagomorpha"), ordered=TRUE)
+# r2$signif_col = NA
+# r2$signif_col[ r2$sig_incr == TRUE ] = "Increase";
+# r2$signif_col[ r2$sig_incr == FALSE ] = "Decrease"
+# 
+# #raw_data = curvesw[ curvesw$HostOrder %in% r2$Order & curvesw$Domestic == FALSE & curvesw$Year <= 2010, ]
+# raw_data = curves[ curves$HostOrder %in% r2$Order & curves$Year <= 2010, ]
+# raw_data$Order = raw_data$HostOrder
+# raw_data$Order = factor(raw_data$Order, levels=c("Cetartiodactyla", "Rodentia", "Primates", "Carnivora", "Chiroptera", "Perissodactyla", "Lagomorpha"), ordered=TRUE)
+# 
+# pt2 = ggplot() + 
+#   #geom_ribbon(data=r2[ -which(r2$Year < 1960 & r2$Order %in% c("Perissodactyla")), ], aes(x=Year, ymin=lower, ymax=upper), alpha=0.3, fill="grey50", col=NA, size=0.05) +
+#   geom_ribbon(data=r2, aes(x=Year, ymin=lower, ymax=upper), alpha=0.25, fill="skyblue4", col=NA, size=0.05) +
+#   geom_point(data=raw_data, aes(x=Year, y=Discovered), col="grey60", size=0.15) +
+#   geom_line(data=r2, aes(x=Year, y=fitted, group=Order, col=sig), size=1.2) +
 #   theme_classic() +
-#   ylab("Viral discovery rate (viruses/year)") 
-
-
-
-
-
-# ============== facetted plot ===============]
-
-r2 = result
-r2$Order = factor(r2$Order, levels=c("Cetartiodactyla", "Rodentia", "Primates", "Carnivora", "Chiroptera", "Perissodactyla", "Lagomorpha"), ordered=TRUE)
-r2$signif_col = NA
-r2$signif_col[ r2$sig_incr == TRUE ] = "Increase";
-r2$signif_col[ r2$sig_incr == FALSE ] = "Decrease"
-
-#raw_data = curvesw[ curvesw$HostOrder %in% r2$Order & curvesw$Domestic == FALSE & curvesw$Year <= 2010, ]
-raw_data = curves[ curves$HostOrder %in% r2$Order & curves$Year <= 2010, ]
-raw_data$Order = raw_data$HostOrder
-raw_data$Order = factor(raw_data$Order, levels=c("Cetartiodactyla", "Rodentia", "Primates", "Carnivora", "Chiroptera", "Perissodactyla", "Lagomorpha"), ordered=TRUE)
-
-pt2 = ggplot() + 
-  #geom_ribbon(data=r2[ -which(r2$Year < 1960 & r2$Order %in% c("Perissodactyla")), ], aes(x=Year, ymin=lower, ymax=upper), alpha=0.3, fill="grey50", col=NA, size=0.05) +
-  geom_ribbon(data=r2, aes(x=Year, ymin=lower, ymax=upper), alpha=0.25, fill="skyblue4", col=NA, size=0.05) +
-  geom_point(data=raw_data, aes(x=Year, y=Discovered), col="grey60", size=0.15) +
-  geom_line(data=r2, aes(x=Year, y=fitted, group=Order, col=sig), size=1.2) +
-  theme_classic() +
-  scale_color_viridis_d(begin=0.25, end=0.75) +
-  lemon::facet_rep_wrap(~Order, ncol=1, scales="free_y", strip.position = "right") +
-  #facet_wrap(~Order, ncol=1, scales="free_y", strip.position = "right") +
-  theme(strip.background = element_blank(),
-        legend.position="none",
-        axis.text.y = element_text(size=11),
-        axis.text.x = element_text(size=13),
-        axis.title=element_text(size=14)) +
-  ylab("Virus discovery rate (viruses/year") +
-  scale_x_continuous(breaks=seq(1930, 2010, by=20), seq(1930, 2010, by=20), name="Year")
-pt2
-
-ggsave(pt2, file="./test3_gam_figure1.png", device="png", units="in", width=5, height=7.5, dpi=300, scale=0.9)
-
-install.packages("ggjoy")
-ggplot() + 
-  ggjoy::geom_joy(data=r2, aes(x=Year, y=fitted, group=Order, col=sig), size=1.2)
-
-ggplot(iris, aes(x = Sepal.Length, y = Species)) + 
-  geom_joy() + 
-  theme_joy()
+#   scale_color_viridis_d(begin=0.25, end=0.75) +
+#   lemon::facet_rep_wrap(~Order, ncol=1, scales="free_y", strip.position = "right") +
+#   #facet_wrap(~Order, ncol=1, scales="free_y", strip.position = "right") +
+#   theme(strip.background = element_blank(),
+#         legend.position="none",
+#         axis.text.y = element_text(size=11),
+#         axis.text.x = element_text(size=13),
+#         axis.title=element_text(size=14)) +
+#   ylab("Virus discovery rate (viruses/year") +
+#   scale_x_continuous(breaks=seq(1930, 2010, by=20), seq(1930, 2010, by=20), name="Year")
+# pt2
+# 
+# ggsave(pt2, file="./test3_gam_figure1.png", device="png", units="in", width=5, height=7.5, dpi=300, scale=0.9)
+# 
+# install.packages("ggjoy")
+# ggplot() + 
+#   ggjoy::geom_joy(data=r2, aes(x=Year, y=fitted, group=Order, col=sig), size=1.2)
+# 
+# ggplot(iris, aes(x = Sepal.Length, y = Species)) + 
+#   geom_joy() + 
+#   theme_joy()

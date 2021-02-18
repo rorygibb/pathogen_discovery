@@ -134,66 +134,6 @@ for(i in 1:length(spp)){
 }
 
 
-# ================= function to calculate windows of significance for heatmap plotting ====================
-
-get_sig_boxes = function(x){
-  
-  dat = result[ result$Host == unique(result$Host)[x], ]
-  dat = dat[ dat$sig == TRUE, ]
-
-  if(nrow(dat) == 0){
-    to_return = data.frame(Host =  unique(result$Host)[x],
-                           YearStart = NA,
-                           YearEnd = NA,
-                           type = NA)
-
-  } else{
-    dat$type = ifelse(dat$sig_incr == TRUE, "Increase", "Decrease")
-    dat$gap = c(10, dat$Year[2:nrow(dat)] - dat$Year[1:(nrow(dat)-1)])
-    startyear = dat$Year[ dat$gap > 1 ]
-    endyear = c(dat$Year[ which(dat$gap > 1)-1 ], dat$Year[ nrow(dat)])
-    type = dat$type[ dat$gap > 1 ]
-    to_return = data.frame(Host =  unique(result$Host)[x],
-                           YearStart = startyear,
-                           YearEnd = endyear,
-                           type = type)
-  }
-
-  return(to_return)
-}
-boxx = do.call(rbind.data.frame, lapply(1:n_distinct(result$Host), get_sig_boxes))
-boxx = boxx[ !is.na(boxx$YearStart), ]
-
-
-# =========== heat map =============
-
-colRamp = colorRampPalette(RColorBrewer::brewer.pal("YlGnBu", n=9))(400)
-
-result$Host = factor(result$Host, levels=rev(spp), ordered=TRUE)
-result$Host2 = paste(result$Host, " (", result$VRichness, ")", sep="")
-result$Host2 = factor(result$Host2, levels=rev(unique(result$Host2)), ordered=TRUE)
-
-boxx = left_join(boxx, result[ !duplicated(result$Host), c("Host", "Host2") ])
-
-p_test = ggplot() +
-  geom_tile(data = result, aes(x=Year, y=Host2, fill=fitted), width=1) +
-  #scale_fill_viridis_c(option="magma", name="Virus\ndiscovery\nrate") + theme_classic() +
-  scale_fill_gradientn(colors = rev(colRamp), na.value="grey90", name="Virus\ndiscovery\nrate") +
-  geom_errorbar(data=boxx, aes(y=Host2, xmin=YearStart, xmax = YearEnd, col=type), width=0.15, size=0.9) +
-  scale_color_manual(values=c("Decrease" = "red", "Increase" = "green"), name="Trend\ndirection") +
-  theme_classic() +
-  scale_x_continuous(breaks=seq(1930, 2010, by=20), seq(1930, 2010, by=20), name="Year") +
-  ylab("") +
-  theme(axis.text.x = element_text(size=14),
-        axis.text.y = element_text(size=12),
-        axis.title.x = element_text(size=14),
-        axis.line.y = element_blank(),
-        legend.title = element_text(size=13),
-        legend.text = element_text(size=13),
-        axis.ticks.y = element_blank())
-p_test
-ggsave(p_test, file="./test_gam_heatmap_spp.png", device="png", units="in", width=8, height=8.5, dpi=300, scale=0.95)
-
 
 
 
@@ -201,38 +141,60 @@ ggsave(p_test, file="./test_gam_heatmap_spp.png", device="png", units="in", widt
 
 # plot
 r2 = result
-r2$Order = factor(r2$Order, levels=fac_order, ordered=TRUE)
+r2$Host2 = r2$Host
+r2$Host2[ r2$Host == "Canis lupus familiaris" ] = "Canis familiaris"
+r2$Host2 = lapply(strsplit(r2$Host2, " "), function(x) paste(x, collapse="\n"))
+r2$Host2 = paste(r2$Host2, " (", r2$VRichness, ")", sep="")
+r2$Host2 = factor(r2$Host2, levels=unique(r2$Host2), ordered=TRUE)
+
 r2$signif_col = NA
 r2$signif_col[ r2$sig_incr == TRUE ] = "Increase";
 r2$signif_col[ r2$sig_incr == FALSE ] = "Decrease"
 
 #raw_data = curvesw[ curvesw$HostOrder %in% r2$Order & curvesw$Domestic == FALSE & curvesw$Year <= 2010, ]
-raw_data = datax[ datax$HostOrder %in% r2$Order & datax$Year <= 2010, ]
-raw_data$Order = raw_data$HostOrder
-raw_data$Order = factor(raw_data$Order, levels=fac_order, ordered=TRUE)
+raw_data = datax[ datax$Host %in% r2$Host & datax$Year <= 2010, ]
+raw_data = left_join(raw_data, r2[ !duplicated(r2$Host), c("Host", "Host2")])
+raw_data$Host2 = factor(raw_data$Host2, levels=unique(r2$Host2), ordered=TRUE)
 
 curve_plot = ggplot() + 
   #geom_ribbon(data=r2[ -which(r2$Year < 1960 & r2$Order %in% c("Perissodactyla")), ], aes(x=Year, ymin=lower, ymax=upper), alpha=0.3, fill="grey50", col=NA, size=0.05) +
-  geom_ribbon(data=r2, aes(x=Year, ymin=lower, ymax=upper), alpha=0.25, fill="skyblue4", col=NA, size=0.05) +
-  geom_point(data=raw_data, aes(x=Year, y=Discovered), col="grey55", size=0.3) +
-  geom_line(data=r2, aes(x=Year, y=fitted, group=Order, col=sig), size=1.2) +
+  geom_ribbon(data=r2[ r2$Host2 %in% unique(r2$Host2)[1:25], ], aes(x=Year, ymin=lower, ymax=upper), alpha=0.25, fill="skyblue4", col=NA, size=0.05) +
+  geom_point(data=raw_data[ raw_data$Host2 %in% unique(r2$Host2)[1:25], ], aes(x=Year, y=Discovered), col="grey55", size=0.3) +
+  geom_line(data=r2[ r2$Host2 %in% unique(r2$Host2)[1:25], ], aes(x=Year, y=fitted, group=Host2, col=sig_incr), size=1.2) +
+  geom_line(data=r2[ r2$Host2 %in% unique(r2$Host2)[1:25] & r2$sig_decr == TRUE, ], aes(x=Year, y=fitted, group=Host2), col="red", size=1.2) +
   theme_classic() +
   scale_color_viridis_d(begin=0.25, end=0.75) +
-  lemon::facet_rep_wrap(~Order, ncol=2, scales="free_y", strip.position = "top") +
+  lemon::facet_rep_wrap(~Host2, ncol=5, nrow=5, scales="free_y") +
   #facet_wrap(~Order, ncol=1, scales="free_y", strip.position = "right") +
   theme(strip.background = element_blank(),
         legend.position="none",
-        strip.text = element_text(size=12),
+        strip.text = element_text(size=13),
         axis.text.y = element_text(size=11),
-        axis.text.x = element_text(size=12),
-        axis.title=element_text(size=13.5)) +
+        axis.text.x = element_text(size=11),
+        axis.title=element_text(size=16)) +
   ylab("Virus discovery rate (viruses per year)") +
-  scale_x_continuous(breaks=seq(1930, 2010, by=20), seq(1930, 2010, by=20), name="Year")
-curve_plot
+  scale_x_continuous(breaks=seq(1940, 2000, by=20), seq(1940, 2000, by=20), name="Year")
+ggsave(curve_plot, file="./output/figures/SI_Figure_SpeciesGAMs_A.png", device="png", units="in", width=10, height=10, dpi=300)
 
-ggsave(curve_plot, file="./output/figures/MS_Figure1_OrderGAMs.png", device="png", units="in", width=8, height=6, dpi=600, scale=0.9)
-
-
+curve_plot2 = ggplot() + 
+  #geom_ribbon(data=r2[ -which(r2$Year < 1960 & r2$Order %in% c("Perissodactyla")), ], aes(x=Year, ymin=lower, ymax=upper), alpha=0.3, fill="grey50", col=NA, size=0.05) +
+  geom_ribbon(data=r2[ r2$Host2 %in% unique(r2$Host2)[26:50], ], aes(x=Year, ymin=lower, ymax=upper), alpha=0.25, fill="skyblue4", col=NA, size=0.05) +
+  geom_point(data=raw_data[ raw_data$Host2 %in% unique(r2$Host2)[26:50], ], aes(x=Year, y=Discovered), col="grey55", size=0.3) +
+  geom_line(data=r2[ r2$Host2 %in% unique(r2$Host2)[26:50], ], aes(x=Year, y=fitted, group=Host2, col=sig_incr), size=1.2) +
+  geom_line(data=r2[ r2$Host2 %in% unique(r2$Host2)[26:50] & r2$sig_decr == TRUE, ], aes(x=Year, y=fitted, group=Host2), col="red", size=1.2) +
+  theme_classic() +
+  scale_color_viridis_d(begin=0.25, end=0.75) +
+  lemon::facet_rep_wrap(~Host2, ncol=5, nrow=5, scales="free_y") +
+  #facet_wrap(~Order, ncol=1, scales="free_y", strip.position = "right") +
+  theme(strip.background = element_blank(),
+        legend.position="none",
+        strip.text = element_text(size=13),
+        axis.text.y = element_text(size=11),
+        axis.text.x = element_text(size=11),
+        axis.title=element_text(size=16)) +
+  ylab("Virus discovery rate (viruses per year)") +
+  scale_x_continuous(breaks=seq(1940, 2000, by=20), seq(1940, 2000, by=20), name="Year")
+ggsave(curve_plot2, file="./output/figures/SI_Figure_SpeciesGAMs_B.png", device="png", units="in", width=10, height=10, dpi=300)
 
 
 
@@ -292,43 +254,108 @@ ggplot(preds) +
 
 
 
-# ============== facetted plot ===============]
+# # ============== facetted plot ===============]
+# 
+# r2 = result
+# r2$Order = factor(r2$Order, levels=c("Cetartiodactyla", "Rodentia", "Primates", "Carnivora", "Chiroptera", "Perissodactyla", "Lagomorpha"), ordered=TRUE)
+# r2$signif_col = NA
+# r2$signif_col[ r2$sig_incr == TRUE ] = "Increase";
+# r2$signif_col[ r2$sig_incr == FALSE ] = "Decrease"
+# 
+# #raw_data = curvesw[ curvesw$HostOrder %in% r2$Order & curvesw$Domestic == FALSE & curvesw$Year <= 2010, ]
+# raw_data = curves[ curves$HostOrder %in% r2$Order & curves$Year <= 2010, ]
+# raw_data$Order = raw_data$HostOrder
+# raw_data$Order = factor(raw_data$Order, levels=c("Cetartiodactyla", "Rodentia", "Primates", "Carnivora", "Chiroptera", "Perissodactyla", "Lagomorpha"), ordered=TRUE)
+# 
+# pt2 = ggplot() + 
+#   #geom_ribbon(data=r2[ -which(r2$Year < 1960 & r2$Order %in% c("Perissodactyla")), ], aes(x=Year, ymin=lower, ymax=upper), alpha=0.3, fill="grey50", col=NA, size=0.05) +
+#   geom_ribbon(data=r2, aes(x=Year, ymin=lower, ymax=upper), alpha=0.25, fill="skyblue4", col=NA, size=0.05) +
+#   geom_point(data=raw_data, aes(x=Year, y=Discovered), col="grey60", size=0.15) +
+#   geom_line(data=r2, aes(x=Year, y=fitted, group=Order, col=sig), size=1.2) +
+#   theme_classic() +
+#   scale_color_viridis_d(begin=0.25, end=0.75) +
+#   lemon::facet_rep_wrap(~Order, ncol=1, scales="free_y", strip.position = "right") +
+#   #facet_wrap(~Order, ncol=1, scales="free_y", strip.position = "right") +
+#   theme(strip.background = element_blank(),
+#         legend.position="none",
+#         axis.text.y = element_text(size=11),
+#         axis.text.x = element_text(size=13),
+#         axis.title=element_text(size=14)) +
+#   ylab("Virus discovery rate (viruses/year") +
+#   scale_x_continuous(breaks=seq(1930, 2010, by=20), seq(1930, 2010, by=20), name="Year")
+# pt2
+# 
+# ggsave(pt2, file="./test3_gam_figure1.png", device="png", units="in", width=5, height=7.5, dpi=300, scale=0.9)
+# 
+# install.packages("ggjoy")
+# ggplot() + 
+#   ggjoy::geom_joy(data=r2, aes(x=Year, y=fitted, group=Order, col=sig), size=1.2)
+# 
+# ggplot(iris, aes(x = Sepal.Length, y = Species)) + 
+#   geom_joy() + 
+#   theme_joy()
 
-r2 = result
-r2$Order = factor(r2$Order, levels=c("Cetartiodactyla", "Rodentia", "Primates", "Carnivora", "Chiroptera", "Perissodactyla", "Lagomorpha"), ordered=TRUE)
-r2$signif_col = NA
-r2$signif_col[ r2$sig_incr == TRUE ] = "Increase";
-r2$signif_col[ r2$sig_incr == FALSE ] = "Decrease"
 
-#raw_data = curvesw[ curvesw$HostOrder %in% r2$Order & curvesw$Domestic == FALSE & curvesw$Year <= 2010, ]
-raw_data = curves[ curves$HostOrder %in% r2$Order & curves$Year <= 2010, ]
-raw_data$Order = raw_data$HostOrder
-raw_data$Order = factor(raw_data$Order, levels=c("Cetartiodactyla", "Rodentia", "Primates", "Carnivora", "Chiroptera", "Perissodactyla", "Lagomorpha"), ordered=TRUE)
 
-pt2 = ggplot() + 
-  #geom_ribbon(data=r2[ -which(r2$Year < 1960 & r2$Order %in% c("Perissodactyla")), ], aes(x=Year, ymin=lower, ymax=upper), alpha=0.3, fill="grey50", col=NA, size=0.05) +
-  geom_ribbon(data=r2, aes(x=Year, ymin=lower, ymax=upper), alpha=0.25, fill="skyblue4", col=NA, size=0.05) +
-  geom_point(data=raw_data, aes(x=Year, y=Discovered), col="grey60", size=0.15) +
-  geom_line(data=r2, aes(x=Year, y=fitted, group=Order, col=sig), size=1.2) +
-  theme_classic() +
-  scale_color_viridis_d(begin=0.25, end=0.75) +
-  lemon::facet_rep_wrap(~Order, ncol=1, scales="free_y", strip.position = "right") +
-  #facet_wrap(~Order, ncol=1, scales="free_y", strip.position = "right") +
-  theme(strip.background = element_blank(),
-        legend.position="none",
-        axis.text.y = element_text(size=11),
-        axis.text.x = element_text(size=13),
-        axis.title=element_text(size=14)) +
-  ylab("Virus discovery rate (viruses/year") +
-  scale_x_continuous(breaks=seq(1930, 2010, by=20), seq(1930, 2010, by=20), name="Year")
-pt2
+# ================= function to calculate windows of significance for heatmap plotting ====================
 
-ggsave(pt2, file="./test3_gam_figure1.png", device="png", units="in", width=5, height=7.5, dpi=300, scale=0.9)
+# get_sig_boxes = function(x){
+#   
+#   dat = result[ result$Host == unique(result$Host)[x], ]
+#   dat = dat[ dat$sig == TRUE, ]
+# 
+#   if(nrow(dat) == 0){
+#     to_return = data.frame(Host =  unique(result$Host)[x],
+#                            YearStart = NA,
+#                            YearEnd = NA,
+#                            type = NA)
+# 
+#   } else{
+#     dat$type = ifelse(dat$sig_incr == TRUE, "Increase", "Decrease")
+#     dat$gap = c(10, dat$Year[2:nrow(dat)] - dat$Year[1:(nrow(dat)-1)])
+#     startyear = dat$Year[ dat$gap > 1 ]
+#     endyear = c(dat$Year[ which(dat$gap > 1)-1 ], dat$Year[ nrow(dat)])
+#     type = dat$type[ dat$gap > 1 ]
+#     to_return = data.frame(Host =  unique(result$Host)[x],
+#                            YearStart = startyear,
+#                            YearEnd = endyear,
+#                            type = type)
+#   }
+# 
+#   return(to_return)
+# }
+# boxx = do.call(rbind.data.frame, lapply(1:n_distinct(result$Host), get_sig_boxes))
+# boxx = boxx[ !is.na(boxx$YearStart), ]
 
-install.packages("ggjoy")
-ggplot() + 
-  ggjoy::geom_joy(data=r2, aes(x=Year, y=fitted, group=Order, col=sig), size=1.2)
 
-ggplot(iris, aes(x = Sepal.Length, y = Species)) + 
-  geom_joy() + 
-  theme_joy()
+
+# =========== heat map =============
+
+# colRamp = colorRampPalette(RColorBrewer::brewer.pal("YlGnBu", n=9))(400)
+# 
+# result$Host = factor(result$Host, levels=rev(spp), ordered=TRUE)
+# result$Host2 = paste(result$Host, " (", result$VRichness, ")", sep="")
+# result$Host2 = factor(result$Host2, levels=rev(unique(result$Host2)), ordered=TRUE)
+# 
+# boxx = left_join(boxx, result[ !duplicated(result$Host), c("Host", "Host2") ])
+# 
+# p_test = ggplot() +
+#   geom_tile(data = result, aes(x=Year, y=Host2, fill=fitted), width=1) +
+#   #scale_fill_viridis_c(option="magma", name="Virus\ndiscovery\nrate") + theme_classic() +
+#   scale_fill_gradientn(colors = rev(colRamp), na.value="grey90", name="Virus\ndiscovery\nrate") +
+#   geom_errorbar(data=boxx, aes(y=Host2, xmin=YearStart, xmax = YearEnd, col=type), width=0.15, size=0.9) +
+#   scale_color_manual(values=c("Decrease" = "red", "Increase" = "green"), name="Trend\ndirection") +
+#   theme_classic() +
+#   scale_x_continuous(breaks=seq(1930, 2010, by=20), seq(1930, 2010, by=20), name="Year") +
+#   ylab("") +
+#   theme(axis.text.x = element_text(size=14),
+#         axis.text.y = element_text(size=12),
+#         axis.title.x = element_text(size=14),
+#         axis.line.y = element_blank(),
+#         legend.title = element_text(size=13),
+#         legend.text = element_text(size=13),
+#         axis.ticks.y = element_blank())
+# p_test
+# ggsave(p_test, file="./test_gam_heatmap_spp.png", device="png", units="in", width=8, height=8.5, dpi=300, scale=0.95)
+# 
+

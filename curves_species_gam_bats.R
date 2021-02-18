@@ -22,77 +22,37 @@ clover = read.csv("./data/clover/Clover_v1.0_NBCIreconciled_20201218.csv", strin
 
 # total viral richness by order
 tr = clover %>%
-  group_by(HostOrder) %>%
+  group_by(Host) %>%
   dplyr::summarise(VRichness = n_distinct(Virus))
 
 
 
-# 1. all species including both wild and domestic
+# Calculate discovery information for species
 
-# unique associations by order and year
-cl1 = clover %>%
-  dplyr::group_by(HostOrder, Virus) %>%
-  dplyr::summarise(Database = paste(unique(Database), collapse=", "),
-                   HostSpecies = paste(unique(Host), collapse=", "),
+# unique associations by year
+dd = clover %>%
+  dplyr::group_by(Host, Virus) %>%
+  dplyr::summarise(HostOrder = head(HostOrder, 1), 
+                   HostFamily = head(HostFamily, 1), 
+                   Database = paste(unique(Database), collapse=", "),
                    NumRecords = length(Year),
-                   YearEarliest = min(Year, na.rm=TRUE),
-                   YearLatest = max(Year, na.rm=TRUE)) %>%
+                   Year = min(Year, na.rm=TRUE),
+                   YearLatest = max(Year, na.rm=TRUE),
+                   Domestic = head(Domestic, 1)) %>%
   left_join(tr) %>%
-  dplyr::arrange(desc(VRichness), HostOrder, YearEarliest)
+  dplyr::arrange(desc(VRichness), Host, Year) 
 
 # create cumulative curves of all years
-curves_all = expand.grid(unique(cl1$HostOrder), 1930:2016) %>%
-  dplyr::rename("HostOrder" = 1, "YearEarliest" = 2) %>%
-  left_join(cl1[ , c("HostOrder", "YearEarliest", "Virus")]) %>%
-  dplyr::group_by(HostOrder, YearEarliest) %>%
+curves = expand.grid(unique(dd$Host), 1930:2010) %>%
+  dplyr::rename("Host" = 1, "Year" = 2) %>%
+  left_join(dd[ , c("Host", "Year", "Virus")]) %>%
+  dplyr::group_by(Host, Year) %>%
   dplyr::summarise(Discovered = sum(!is.na(Virus)),
                    Virus = paste(unique(Virus), collapse=", ")) %>%
-  left_join(cl1[ !duplicated(cl1$HostOrder), c("HostOrder", "VRichness") ]) %>%
-  dplyr::arrange(desc(VRichness), HostOrder, YearEarliest) %>%
-  dplyr::group_by(HostOrder) %>%
-  dplyr::mutate(VirusCumulative = cumsum(Discovered)) %>%
-  dplyr::rename("Year" = YearEarliest)
-
-
-# 2. split out by wild/domestic
-
-# unique associations by order, year
-cl2 = clover %>%
-  dplyr::filter(!is.na(Year)) %>%
-  dplyr::group_by(HostOrder, Domestic, Virus) %>%
-  dplyr::summarise(Database = paste(unique(Database), collapse=", "),
-                   HostSpecies = paste(unique(Host), collapse=", "),
-                   NumRecords = length(Year),
-                   YearEarliest = min(Year, na.rm=TRUE),
-                   YearLatest = max(Year, na.rm=TRUE)) %>%
-  left_join(tr) %>%
-  dplyr::arrange(desc(VRichness), HostOrder, YearEarliest) 
-
-# create cumulative curves of all years
-curvesw = expand.grid(unique(cl2$HostOrder), unique(cl2$Domestic), 1930:2016) %>%
-  dplyr::rename("HostOrder" = 1, "Domestic" = 2, "YearEarliest" = 3) %>%
-  left_join(cl2[ , c("HostOrder", "Domestic", "YearEarliest", "Virus")]) %>%
-  dplyr::group_by(HostOrder, Domestic, YearEarliest) %>%
-  dplyr::summarise(Discovered = sum(!is.na(Virus)),
-                   Virus = paste(unique(Virus), collapse=", ")) %>%
-  left_join(cl2[ !duplicated(cl2$HostOrder), c("HostOrder", "VRichness") ]) %>%
-  dplyr::arrange(desc(VRichness), HostOrder, Domestic, YearEarliest) %>%
-  dplyr::group_by(HostOrder, Domestic) %>%
-  dplyr::mutate(VirusCumulative = cumsum(Discovered)) %>%
-  dplyr::rename("Year" = YearEarliest)
-
-# separate out into domestic and wild
-curves_wild = curvesw[ curvesw$Domestic == FALSE, ]
-curves_dom = curvesw[ curvesw$Domestic == FALSE, ]
-
-
-
-
-# ==================== datasets: curves_all, curves_wild and curves_dom =====================
-
-head(curves_all)
-head(curves_wild)
-head(curves_dom)
+  left_join(dd[ !duplicated(dd$Host), c("Host", "HostOrder", "HostFamily", "VRichness", "Domestic") ]) %>%
+  dplyr::arrange(desc(VRichness), Host, Year) %>%
+  dplyr::group_by(Host) %>%
+  dplyr::mutate(VirusCumulative = cumsum(Discovered))
 
 
 
@@ -120,46 +80,29 @@ source(dest2)
 # data frame for results and specified orders
 result = data.frame()
 
-# specify data for inclusion
-model = "all"
-model = "domestic"
+# bats
+curves = curves[ curves$HostOrder == "Chiroptera", ]
+datax = curves[ curves$VRichness >= 8, ]
 
-if(model=="all"){
-  datax = curves_all
-  modname = "allspecies"
-  orders = c("Primates", "Lagomorpha", "Perissodactyla", "Rodentia", "Carnivora", "Cetartiodactyla", "Chiroptera", "Didelphimorphia")
-  fac_order = c("Cetartiodactyla", "Rodentia", "Primates", "Carnivora", "Chiroptera", "Perissodactyla", "Lagomorpha", "Didelphimorphia")
-}
-if(model=="domestic"){
-  datax = curves_dom
-  modname = "domestic"
-  orders = c("Lagomorpha", "Perissodactyla", "Rodentia", "Carnivora", "Cetartiodactyla")
-  fac_order = c("Cetartiodactyla", "Rodentia", "Carnivora", "Perissodactyla", "Lagomorpha")
-}
-if(model == "wild"){
-  datax = curves_wild
-  modname = "wild"
-  orders = c("Primates", "Lagomorpha", "Rodentia", "Carnivora", "Cetartiodactyla", "Chiroptera")
-  fac_order = c("Cetartiodactyla", "Rodentia", "Primates", "Carnivora", "Chiroptera", "Lagomorpha")
-}
+# get species
+spp = unique(datax$Host)
 
 # for each order 
-for(i in 1:length(orders)){
+for(i in 1:length(spp)){
   
   # data (either wild only, or all) with cutoff of 2010
-  ord = orders[i]
-  dd = datax[ datax$HostOrder == ord & datax$Year <= 2010, ]
+  spx = spp[i]
+  dd = datax[ datax$Host == spx & datax$Year <= 2010, ]
   
   # specify time threshold for inclusion of zeros prior to the first virus discovered in that taxa
   # either start from the first year of virus discovery, or n years beforehand, or can exclude this and run from 0
-  if(model == "domestic"){
-    time_thresh = 10
-    first_year = min(dd$Year[ dd$Discovered > 0 ])
-    dd = dd[ dd$Year >= first_year - time_thresh, ]
-  }
+  time_thresh = 10
+  first_year = min(dd$Year[ dd$Discovered > 0 ])
+  dd = dd[ dd$Year >= first_year - time_thresh, ]
   
   # GAM fit with spline on Year and using ML, Poisson likelihood
   m1 = mgcv::gamm(Discovered ~ s(Year), family="poisson", data=dd, method="ML")
+  #plot(m1$gam)
   
   # acf(resid(m1$lme, type = "normalized"))
   # pacf(resid(m1$lme, type = "normalized"))
@@ -185,105 +128,141 @@ for(i in 1:length(orders)){
   preds$sig_decr = !is.na(S$decr)
   preds$sig = !is.na(S$incr) | !is.na(S$decr)
   
-  preds$Order = ord
+  preds$Host = spx
+  preds$HostOrder = dd$HostOrder[1]
+  preds$VRichness = dd$VRichness[1]
+  preds$Domestic = dd$Domestic[1]
   result = rbind(result, preds)
 }
 
 
-# # ================= function to calculate windows of significance for heatmap plotting ====================
-# 
-# get_sig_boxes = function(x){
-#   dat = result[ result$Order == unique(result$Order)[x], ]
-#   dat = dat[ dat$sig == TRUE, ]
-#   
-#   if(nrow(dat) == 0){
-#     to_return = data.frame(Order =  unique(result$Order)[x],
-#                            YearStart = NA,
-#                            YearEnd = NA, 
-#                            type = NA)
-#     
-#   } else{
-#     dat$type = ifelse(dat$sig_incr == TRUE, "Increase", "Decrease")
-#     dat$gap = c(10, dat$Year[2:nrow(dat)] - dat$Year[1:(nrow(dat)-1)])
-#     startyear = dat$Year[ dat$gap > 1 ]
-#     endyear = c(dat$Year[ which(dat$gap > 1)-1 ], dat$Year[ nrow(dat)])
-#     type = dat$type[ dat$gap > 1 ]
-#     to_return = data.frame(Order =  unique(result$Order)[x],
-#                            YearStart = startyear,
-#                            YearEnd = endyear, 
-#                            type = type)
-#   }
-#   
-#   return(to_return)
-# }
-# boxx = do.call(rbind.data.frame, lapply(1:n_distinct(result$Order), get_sig_boxes))
-# boxx = boxx[ !is.na(boxx$YearStart), ]
+# ================= function to calculate windows of significance for heatmap plotting ====================
+
+get_sig_boxes = function(x){
+  
+  dat = result[ result$Host == unique(result$Host)[x], ]
+  dat = dat[ dat$sig == TRUE, ]
+
+  if(nrow(dat) == 0){
+    to_return = data.frame(Host =  unique(result$Host)[x],
+                           YearStart = NA,
+                           YearEnd = NA,
+                           type = NA)
+
+  } else{
+    dat$type = ifelse(dat$sig_incr == TRUE, "Increase", "Decrease")
+    dat$gap = c(10, dat$Year[2:nrow(dat)] - dat$Year[1:(nrow(dat)-1)])
+    startyear = dat$Year[ dat$gap > 1 ]
+    endyear = c(dat$Year[ which(dat$gap > 1)-1 ], dat$Year[ nrow(dat)])
+    type = dat$type[ dat$gap > 1 ]
+    to_return = data.frame(Host =  unique(result$Host)[x],
+                           YearStart = startyear,
+                           YearEnd = endyear,
+                           type = type)
+  }
+
+  return(to_return)
+}
+boxx = do.call(rbind.data.frame, lapply(1:n_distinct(result$Host), get_sig_boxes))
+boxx = boxx[ !is.na(boxx$YearStart), ]
+
 
 
 # =========== heat map =============
 
 # colRamp = colorRampPalette(RColorBrewer::brewer.pal("YlGnBu", n=9))(400)
 # 
-# result$Order = factor(result$Order, levels=rev(c("Cetartiodactyla", "Rodentia", "Primates", "Carnivora", "Chiroptera", "Perissodactyla", "Lagomorpha")), ordered=TRUE)
+# result$Host = factor(result$Host, levels=rev(spp), ordered=TRUE)
+# result$Host2 = paste(result$Host, " (", result$VRichness, ")", sep="")
+# result$Host2 = factor(result$Host2, levels=rev(unique(result$Host2)), ordered=TRUE)
+# 
+# boxx = left_join(boxx, result[ !duplicated(result$Host), c("Host", "Host2") ])
+# 
 # p_test = ggplot() +
-#   geom_tile(data = result, aes(x=Year, y=Order, fill=fitted), width=1) +
-#   #scale_fill_viridis_c(option="magma", name="Virus\ndiscovery\nrate") + theme_classic() + 
+#   geom_tile(data = result, aes(x=Year, y=Host2, fill=fitted), width=1) +
+#   #scale_fill_viridis_c(option="magma", name="Virus\ndiscovery\nrate") + theme_classic() +
 #   scale_fill_gradientn(colors = rev(colRamp), na.value="grey90", name="Virus\ndiscovery\nrate") +
-#   geom_errorbar(data=boxx, aes(y=Order, xmin=YearStart, xmax = YearEnd, col=type), width=0.15, size=0.9) +
+#   geom_errorbar(data=boxx, aes(y=Host2, xmin=YearStart, xmax = YearEnd, col=type), width=0.15, size=0.9) +
 #   scale_color_manual(values=c("Decrease" = "red", "Increase" = "green"), name="Trend\ndirection") +
 #   theme_classic() +
 #   scale_x_continuous(breaks=seq(1930, 2010, by=20), seq(1930, 2010, by=20), name="Year") +
-#   ylab("") + 
-#   theme(axis.text.x = element_text(size=11),
+#   ylab("") +
+#   theme(axis.text.x = element_text(size=14),
 #         axis.text.y = element_text(size=12),
-#         axis.title.x = element_text(size=12),
+#         axis.title.x = element_text(size=14),
 #         axis.line.y = element_blank(),
+#         legend.title = element_text(size=13),
+#         legend.text = element_text(size=13),
 #         axis.ticks.y = element_blank())
-# ggsave(p_test, file="./test_gam_figure1.png", device="png", units="in", width=5, height=3.5, dpi=300)
+# p_test
+# ggsave(p_test, file="./test_gam_heatmap_spp.png", device="png", units="in", width=8, height=8.5, dpi=300, scale=0.95)
+# 
+
 
 
 # ======================= visualise fitted curves ===========================
 
 # plot
 r2 = result
-r2$Order = factor(r2$Order, levels=fac_order, ordered=TRUE)
+r2$Host2 = r2$Host
+r2$Host2[ r2$Host == "Canis lupus familiaris" ] = "Canis familiaris"
+r2$Host2 = lapply(strsplit(r2$Host2, " "), function(x) paste(x, collapse="\n"))
+r2$Host2 = paste(r2$Host2, " (", r2$VRichness, ")", sep="")
+r2$Host2 = factor(r2$Host2, levels=unique(r2$Host2), ordered=TRUE)
+
 r2$signif_col = NA
-r2$signif_col[ r2$sig_incr == TRUE ] = "Increase"
+r2$signif_col[ r2$sig_incr == TRUE ] = "Increase";
 r2$signif_col[ r2$sig_incr == FALSE ] = "Decrease"
 
 #raw_data = curvesw[ curvesw$HostOrder %in% r2$Order & curvesw$Domestic == FALSE & curvesw$Year <= 2010, ]
-raw_data = datax[ datax$HostOrder %in% r2$Order & datax$Year <= 2010, ]
-raw_data$Order = raw_data$HostOrder
-raw_data$Order = factor(raw_data$Order, levels=fac_order, ordered=TRUE)
+raw_data = datax[ datax$Host %in% r2$Host & datax$Year <= 2010, ]
+raw_data = left_join(raw_data, r2[ !duplicated(r2$Host), c("Host", "Host2")])
+raw_data$Host2 = factor(raw_data$Host2, levels=unique(r2$Host2), ordered=TRUE)
 
 curve_plot = ggplot() + 
   #geom_ribbon(data=r2[ -which(r2$Year < 1960 & r2$Order %in% c("Perissodactyla")), ], aes(x=Year, ymin=lower, ymax=upper), alpha=0.3, fill="grey50", col=NA, size=0.05) +
-  geom_ribbon(data=r2, aes(x=Year, ymin=lower, ymax=upper), alpha=0.25, fill="skyblue4", col=NA, size=0.05) +
-  geom_point(data=raw_data, aes(x=Year, y=Discovered), col="grey55", size=0.3) +
-  geom_line(data=r2, aes(x=Year, y=fitted, group=Order, col=sig_incr), size=1.2) +
-  geom_line(data=r2[ r2$sig_decr == TRUE, ], aes(x=Year, y=fitted, group=Order), color="red", size=1.2) +
+  geom_ribbon(data=r2[ r2$Host2 %in% unique(r2$Host2)[1:25], ], aes(x=Year, ymin=lower, ymax=upper), alpha=0.25, fill="skyblue4", col=NA, size=0.05) +
+  geom_point(data=raw_data[ raw_data$Host2 %in% unique(r2$Host2)[1:25], ], aes(x=Year, y=Discovered), col="grey55", size=0.3) +
+  geom_line(data=r2[ r2$Host2 %in% unique(r2$Host2)[1:25], ], aes(x=Year, y=fitted, group=Host2, col=sig), size=1.2) +
   theme_classic() +
   scale_color_viridis_d(begin=0.25, end=0.75) +
-  lemon::facet_rep_wrap(~Order, ncol=2, scales="free_y", strip.position = "top") +
+  lemon::facet_rep_wrap(~Host2, ncol=5, nrow=5, scales="free_y") +
   #facet_wrap(~Order, ncol=1, scales="free_y", strip.position = "right") +
   theme(strip.background = element_blank(),
         legend.position="none",
-        strip.text = element_text(size=12),
+        strip.text = element_text(size=13),
         axis.text.y = element_text(size=11),
-        axis.text.x = element_text(size=12),
-        axis.title=element_text(size=13.5)) +
+        axis.text.x = element_text(size=11),
+        axis.title=element_text(size=16)) +
   ylab("Virus discovery rate (viruses per year)") +
-  scale_x_continuous(breaks=seq(1930, 2010, by=20), seq(1930, 2010, by=20), name="Year")
+  scale_x_continuous(breaks=seq(1940, 2000, by=20), seq(1940, 2000, by=20), name="Year")
 curve_plot
 
-ggsave(curve_plot, file="./output/figures/MS_Figure1_OrderGAMs.png", device="png", units="in", width=8, height=6, dpi=600, scale=0.9)
+ggsave(curve_plot, file="./output/figures/SI_Figure_SpeciesGAMs_A.png", device="png", units="in", width=10, height=10, dpi=300)
 
-
+curve_plot2 = ggplot() + 
+  #geom_ribbon(data=r2[ -which(r2$Year < 1960 & r2$Order %in% c("Perissodactyla")), ], aes(x=Year, ymin=lower, ymax=upper), alpha=0.3, fill="grey50", col=NA, size=0.05) +
+  geom_ribbon(data=r2[ r2$Host2 %in% unique(r2$Host2)[26:50], ], aes(x=Year, ymin=lower, ymax=upper), alpha=0.25, fill="skyblue4", col=NA, size=0.05) +
+  geom_point(data=raw_data[ raw_data$Host2 %in% unique(r2$Host2)[26:50], ], aes(x=Year, y=Discovered), col="grey55", size=0.3) +
+  geom_line(data=r2[ r2$Host2 %in% unique(r2$Host2)[26:50], ], aes(x=Year, y=fitted, group=Host2, col=sig), size=1.2) +
+  theme_classic() +
+  scale_color_viridis_d(begin=0.25, end=0.75) +
+  lemon::facet_rep_wrap(~Host2, ncol=5, nrow=5, scales="free_y") +
+  #facet_wrap(~Order, ncol=1, scales="free_y", strip.position = "right") +
+  theme(strip.background = element_blank(),
+        legend.position="none",
+        strip.text = element_text(size=13),
+        axis.text.y = element_text(size=11),
+        axis.text.x = element_text(size=11),
+        axis.title=element_text(size=16)) +
+  ylab("Virus discovery rate (viruses per year)") +
+  scale_x_continuous(breaks=seq(1940, 2000, by=20), seq(1940, 2000, by=20), name="Year")
+ggsave(curve_plot2, file="./output/figures/SI_Figure_SpeciesGAMs_B.png", device="png", units="in", width=10, height=10, dpi=300)
 
 
 
 ggplot(preds) +
-  geom_line(aes(Year, fitted, group=Order, col=sig)) +
+  geom_line(aes(Year, fitted, group=Host, col=sig)) +
   geom_ribbon(aes(Year, ymin=lower, ymax=upper), alpha=0.2, fill="skyblue4")
   
 
