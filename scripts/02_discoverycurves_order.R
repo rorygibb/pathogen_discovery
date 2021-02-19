@@ -11,14 +11,19 @@ setwd("C:/Users/roryj/Documents/PhD/202008_discovery/code/pathogen_discovery/")
 pacman::p_load("dplyr", "magrittr", "stringr", "ggplot2", "inlabru", "INLA", "lemon", "mgcv")
 
 # domestic species to label
-domestic = read.csv("./data/clover/domestic_status/HostLookup_Domestic.csv", stringsAsFactors = FALSE)
+domestic = read.csv("./data/clovert/domestic_status/HostLookup_Domestic.csv", stringsAsFactors = FALSE)
 
 # associations data and no humans
-clover = read.csv("./data/clover/Clover_v1.0_NBCIreconciled_20201218.csv", stringsAsFactors = FALSE) %>%
+clover = read.csv("./data/clovert/CLOVERMammalViruses1.0_AssociationsFlatFile.csv", stringsAsFactors = FALSE) %>%
   dplyr::filter(Host != "Homo sapiens") %>%
   dplyr::mutate(Domestic = ifelse(Host %in% domestic$Host, TRUE, FALSE)) %>%
   #dplyr::filter(DetectionMethod != "Antibodies") %>%
   dplyr::filter(DetectionMethod != "Not specified")
+
+# create combined year column
+clover$Year = clover$PublicationYear
+clover$Year[ is.na(clover$Year) ] = clover$ReleaseYear[ is.na(clover$Year) ]
+clover = clover[ !is.na(clover$Year), ]
 
 # total viral richness by order
 tr = clover %>%
@@ -88,11 +93,38 @@ curves_dom = curvesw[ curvesw$Domestic == FALSE, ]
 
 
 
-# ==================== datasets: curves_all, curves_wild and curves_dom =====================
+# ==================== Plot cumulative virus discovery curves for all Orders, split out by domestic/wild ==================================
 
-head(curves_all)
-head(curves_wild)
-head(curves_dom)
+# set up data for plotting 
+plot_data = curvesw
+plot_data$facet = paste(plot_data$HostOrder, " (", plot_data$VRichness, ")", sep="")
+fac_order = plot_data[ !duplicated(plot_data$HostOrder), c("HostOrder", "facet", "VRichness")] %>% dplyr::arrange(desc(VRichness))
+plot_data$facet = factor(plot_data$facet, levels=fac_order$facet, ordered=TRUE)
+plot_data$DW = ifelse(plot_data$Domestic == TRUE, "Domestic", "Wild")
+
+# plot for MS / SI up to 2010
+px = ggplot(plot_data[ plot_data$Year <= 2010, ]) + 
+  geom_line(aes(Year, VirusCumulative, group=DW, col=DW), size=1) + 
+  #facet_wrap(~facet, scales="free_y") +
+  lemon::facet_rep_wrap(~facet, scales="free_y") +
+  theme_minimal() +
+  scale_color_viridis_d(option="viridis", begin=0.25, end=0.7, direction=-1) +
+  scale_x_continuous(breaks=seq(1950, 2010, by=30), labels=seq(1950, 2010, by=30)) +
+  theme(strip.background = element_blank(), 
+        panel.grid = element_blank(),
+        strip.text = element_text(size=11),
+        axis.title = element_text(size=13),
+        legend.title = element_blank(), 
+        legend.position = "bottom", 
+        legend.text = element_text(size=13),
+        axis.text = element_text(size=10.5),
+        axis.line.x = element_line(),
+        axis.line.y = element_line(),
+        axis.ticks = element_line()) + 
+  ylab("Cumulative viral richness")
+ggsave(px, file="./output/figures/MS_MammalOrders_CumulativeCurves.png", device="png", units="in", width=10, height=6.5, dpi=300)
+
+
 
 
 
@@ -121,8 +153,9 @@ source(dest2)
 result = data.frame()
 
 # specify data for inclusion
-model = "all"
-model = "domestic"
+# model = "all"
+# model = "domestic"
+model = "wild"
 
 if(model=="all"){
   datax = curves_all
@@ -159,7 +192,7 @@ for(i in 1:length(orders)){
   }
   
   # GAM fit with spline on Year and using ML, Poisson likelihood
-  m1 = mgcv::gamm(Discovered ~ s(Year), family="poisson", data=dd, method="ML")
+  m1 = mgcv::gamm(Discovered ~ s(Year), family="poisson", data=dd, method="REML")
   
   # acf(resid(m1$lme, type = "normalized"))
   # pacf(resid(m1$lme, type = "normalized"))

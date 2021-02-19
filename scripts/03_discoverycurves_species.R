@@ -11,16 +11,21 @@ setwd("C:/Users/roryj/Documents/PhD/202008_discovery/code/pathogen_discovery/")
 pacman::p_load("dplyr", "magrittr", "stringr", "ggplot2", "inlabru", "INLA", "lemon", "mgcv")
 
 # domestic species to label
-domestic = read.csv("./data/clover/domestic_status/HostLookup_Domestic.csv", stringsAsFactors = FALSE)
+domestic = read.csv("./data/clovert/domestic_status/HostLookup_Domestic.csv", stringsAsFactors = FALSE)
 
 # associations data and no humans
-clover = read.csv("./data/clover/Clover_v1.0_NBCIreconciled_20201218.csv", stringsAsFactors = FALSE) %>%
+clover = read.csv("./data/clovert/CLOVERMammalViruses1.0_AssociationsFlatFile.csv", stringsAsFactors = FALSE) %>%
   dplyr::filter(Host != "Homo sapiens") %>%
   dplyr::mutate(Domestic = ifelse(Host %in% domestic$Host, TRUE, FALSE)) %>%
   #dplyr::filter(DetectionMethod != "Antibodies") %>%
   dplyr::filter(DetectionMethod != "Not specified")
 
-# total viral richness by order
+# create combined year column
+clover$Year = clover$PublicationYear
+clover$Year[ is.na(clover$Year) ] = clover$ReleaseYear[ is.na(clover$Year) ]
+clover = clover[ !is.na(clover$Year), ]
+
+# total viral richness by species
 tr = clover %>%
   group_by(Host) %>%
   dplyr::summarise(VRichness = n_distinct(Virus))
@@ -74,8 +79,58 @@ source(dest2)
 
 
 
+# ================== fit overall GAM at the wild species-level ===================
 
-# =================== fit GAMs and estimate curve derivative for specified Orders ============================
+# # GAM across all species fitted using REML
+# dd = curves[ curves$Domestic == FALSE & curves$Year < 2011, ]
+# m_sp = mgcv::gamm(Discovered ~ s(Year), family="poisson", data=dd, method="REML")
+# 
+# # fitted spline and pointwise confidence intervals, transform to natural scale
+# # n.b. simultaneous intervals can be obtained via predictive sim https://fromthebottomoftheheap.net/2016/12/15/simultaneous-interval-revisited/
+# #preds = data.frame(Year = dd$Year)
+# preds = data.frame(Year = seq(min(dd$Year), max(dd$Year), length.out=n_distinct(dd$Year)))
+# preds = cbind(preds, predict(m_sp$gam, preds, type = "link", se.fit = TRUE))
+# preds$upper = exp(preds$fit + (1.96*preds$se.fit))
+# preds$lower = exp(preds$fit - (1.96*preds$se.fit))
+# preds$fitted = exp(preds$fit)
+# 
+# # use Deriv function to estimate the first derivative of split at each year
+# m1.d = Deriv(m_sp$gam, n=length(preds$Year))
+# plot(m1.d, sizer=TRUE)
+# 
+# # estimate CIs on first derivative and identify areas where CIs indicate signifiance of trend
+# CI = confint(m1.d, alpha = 0.01)
+# S = signifD(preds$fit, m1.d$Year$deriv, CI$Year$upper, CI$Year$lower, eval = 0)
+# preds$sig_incr = !is.na(S$incr)
+# preds$sig_decr = !is.na(S$decr)
+# preds$sig = !is.na(S$incr) | !is.na(S$decr)
+# 
+# # combine with discovered
+# 
+# # 
+# ggplot() + 
+#   #geom_ribbon(data=r2[ -which(r2$Year < 1960 & r2$Order %in% c("Perissodactyla")), ], aes(x=Year, ymin=lower, ymax=upper), alpha=0.3, fill="grey50", col=NA, size=0.05) +
+#   geom_ribbon(data=preds, aes(x=Year, ymin=lower, ymax=upper), alpha=0.25, fill="skyblue4", col=NA, size=0.05) +
+#   geom_line(data=preds, aes(x=Year, y=fitted), size=1.2) +
+#   #geom_line(data=preds[ preds$sig_decr == TRUE, ], aes(x=Year, y=fitted), col="red", size=1.2) +
+#   theme_classic() +
+#   scale_color_viridis_d(begin=0.25, end=0.75) +
+#   #facet_wrap(~Order, ncol=1, scales="free_y", strip.position = "right") +
+#   theme(strip.background = element_blank(),
+#         legend.position="none",
+#         strip.text = element_text(size=13),
+#         axis.text.y = element_text(size=11),
+#         axis.text.x = element_text(size=11),
+#         axis.title=element_text(size=16)) +
+#   ylab("Virus discovery rate (viruses per year)") +
+#   scale_x_continuous(breaks=seq(1940, 2000, by=20), seq(1940, 2000, by=20), name="Year")
+
+
+
+
+
+
+# =================== fit GAMs and estimate curve derivative for top n species ============================
 
 # data frame for results and specified orders
 result = data.frame()
@@ -174,7 +229,7 @@ curve_plot = ggplot() +
         axis.title=element_text(size=16)) +
   ylab("Virus discovery rate (viruses per year)") +
   scale_x_continuous(breaks=seq(1940, 2000, by=20), seq(1940, 2000, by=20), name="Year")
-ggsave(curve_plot, file="./output/figures/SI_Figure_SpeciesGAMs_A.png", device="png", units="in", width=10, height=10, dpi=300)
+ggsave(curve_plot, file="./output/figures/SI_Figure_SpeciesGAMs_A.png", device="png", units="in", width=11, height=10, dpi=300)
 
 curve_plot2 = ggplot() + 
   #geom_ribbon(data=r2[ -which(r2$Year < 1960 & r2$Order %in% c("Perissodactyla")), ], aes(x=Year, ymin=lower, ymax=upper), alpha=0.3, fill="grey50", col=NA, size=0.05) +
@@ -194,7 +249,7 @@ curve_plot2 = ggplot() +
         axis.title=element_text(size=16)) +
   ylab("Virus discovery rate (viruses per year)") +
   scale_x_continuous(breaks=seq(1940, 2000, by=20), seq(1940, 2000, by=20), name="Year")
-ggsave(curve_plot2, file="./output/figures/SI_Figure_SpeciesGAMs_B.png", device="png", units="in", width=10, height=10, dpi=300)
+ggsave(curve_plot2, file="./output/figures/SI_Figure_SpeciesGAMs_B.png", device="png", units="in", width=11, height=10, dpi=300)
 
 
 
