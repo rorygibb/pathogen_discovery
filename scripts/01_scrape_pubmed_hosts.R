@@ -102,7 +102,7 @@ save_file = paste(output_loc, "PubMed_HostsEffort_PerYear_1930.csv", sep="")
 
 # for all host species get time series of publication effort (axis axis == impossible to lookup)
 species_vec = unique(spp$Host)
-species_vec = species_vec[ !species_vec %in% c("Axis axis", "Indicator indicator", "Canis lupus familiaris")]
+#species_vec = species_vec[ !species_vec %in% c("Axis axis", "Indicator indicator", "Canis lupus familiaris")]
 
 # re-run for lookup error
 # rr = read.csv(paste(output_loc, "PubMed_Hosts_PubsByYear_22102020_syns.csv", sep=""), stringsAsFactors = FALSE)
@@ -154,7 +154,7 @@ save_file = paste(output_loc, "PubMed_HostsEffort_PerYear_VirusRelated.csv", sep
 
 # for all host species get time series of publication effort
 species_vec = unique(spp$Host)
-species_vec = species_vec[ !species_vec %in% c("Axis axis", "Indicator indicator", "Canis lupus familiaris")]
+#species_vec = species_vec[ !species_vec %in% c("Axis axis", "Indicator indicator", "Canis lupus familiaris")]
 
 # re-run for lookup error
 # rr = read.csv(paste(output_loc, "PubMed_Hosts_PubsByYear_22102020_syns.csv", sep=""), stringsAsFactors = FALSE)
@@ -198,21 +198,21 @@ for(i in 1:length(species_vec)){
 
 # =========================== Create compiled data for other projects =========================
 
-hx = read.csv("./output/host_effort/PubMed_HostsEffort_PerYear_19302020.csv") %>%
-  dplyr::group_by(Host) %>%
-  dplyr::summarise(Pubs_All = sum(NumPubs))
-
-hy = read.csv("./output/host_effort/PubMed_HostsEffort_PerYear_VirusRelated_19302020.csv") %>%
-  dplyr::group_by(Host) %>%
-  dplyr::summarise(Pubs_VirusRelated = sum(NumPubs))
-
-effort = left_join(hx, hy)
-effort = left_join(effort, spp[ !duplicated(spp$Host), c("Host", "HostOrder", "HostFamily")])
-write.csv(effort, "./output/host_effort/PubMed_HostCounts_Total_CLOVER.csv", row.names=FALSE)
-
-ggplot(effort) + 
-  geom_boxplot(aes(HostOrder, Pubs_VirusRelated)) +
-  theme(axis.text.x = element_text(angle=90))
+# hx = read.csv("./output/host_effort/PubMed_HostsEffort_PerYear_19302020.csv") %>%
+#   dplyr::group_by(Host) %>%
+#   dplyr::summarise(Pubs_All = sum(NumPubs))
+# 
+# hy = read.csv("./output/host_effort/PubMed_HostsEffort_PerYear_VirusRelated_19302020.csv") %>%
+#   dplyr::group_by(Host) %>%
+#   dplyr::summarise(Pubs_VirusRelated = sum(NumPubs))
+# 
+# effort = left_join(hx, hy)
+# effort = left_join(effort, spp[ !duplicated(spp$Host), c("Host", "HostOrder", "HostFamily")])
+# write.csv(effort, "./output/host_effort/PubMed_HostCounts_Total_CLOVER.csv", row.names=FALSE)
+# 
+# ggplot(effort) + 
+#   geom_boxplot(aes(HostOrder, Pubs_VirusRelated)) +
+#   theme(axis.text.x = element_text(angle=90))
 
 
 
