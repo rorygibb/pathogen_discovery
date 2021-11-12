@@ -1,4 +1,5 @@
 
+
 # ====================== Overall cumulative trends in species-level viral discovery and effort =====================
 
 # root dir and dependencies
@@ -148,17 +149,17 @@ plot_cumul = ggplot() +
 # =================== overall cumulative publications at the species level ===================
 
 # read effort
-hx = read.csv("./output/host_effort/PubMed_HostsEffort_PerYear_19302020.csv") %>%
+hx = read.csv("./output/host_effort/PubMed_HostsEffort_PerYear_1930_VIRION.csv") %>%
   dplyr::select(-Note) %>%
   dplyr::mutate(Type = "All publications")
-hy = read.csv("./output/host_effort/PubMed_HostsEffort_PerYear_VirusRelated_19302020.csv") %>%
+hy = read.csv("./output/host_effort/PubMed_HostsEffort_PerYear_VirusRelated_VIRION.csv") %>%
   dplyr::select(-Note, -VirusRelated) %>%
   dplyr::mutate(Type = "Virus-related")
 effort = rbind(hx, hy) %>%
   dplyr::left_join(curves[ !duplicated(curves$Host), c("Host", "HostOrder", "HostFamily")])
 
 # remove domestics
-dom = read.csv("./data/clover/domestic_status/HostLookup_Domestic.csv")
+dom = read.csv("./data/clovert/domestic_status/HostLookup_Domestic.csv")
 effort$Domestic = ifelse(effort$Host %in% dom$Host, TRUE, FALSE)
 
 # create publication curves (virus related)
@@ -215,10 +216,10 @@ ggsave(p_comb, file="./output/figures_2021/SI_CumulativeCurves.png", dpi=600, wi
 # ================== Publication trends at the Order level =====================
 
 # read effort
-hx = read.csv("./output/host_effort/PubMed_HostsEffort_PerYear_19302020.csv") %>%
+hx = read.csv("./output/host_effort/PubMed_HostsEffort_PerYear_1930_VIRION.csv") %>%
   dplyr::select(-Note) %>%
   dplyr::mutate(Type = "All publications")
-hy = read.csv("./output/host_effort/PubMed_HostsEffort_PerYear_VirusRelated_19302020.csv") %>%
+hy = read.csv("./output/host_effort/PubMed_HostsEffort_PerYear_VirusRelated_VIRION.csv") %>%
   dplyr::select(-Note, -VirusRelated) %>%
   dplyr::mutate(Type = "Virus-related")
 
@@ -227,7 +228,7 @@ effort = rbind(hx, hy) %>%
   dplyr::left_join(curves[ !duplicated(curves$Host), c("Host", "HostOrder", "HostFamily")])
 
 # remove domestics
-dom = read.csv("./data/clover/domestic_status/HostLookup_Domestic.csv")
+dom = read.csv("./data/clovert/domestic_status/HostLookup_Domestic.csv")
 effort$Domestic = ifelse(effort$Host %in% dom$Host, TRUE, FALSE)
 
 # plot effort over time
@@ -253,7 +254,7 @@ eff_all = effort[ effort$Year < 2019 & effort$Domestic == FALSE, ] %>%
                    `Number of families` = n_distinct(HostFamily)) %>%
   dplyr::mutate(HostOrder = Hmisc::capitalize(HostOrder)) %>%
   dplyr::filter(!is.na(HostOrder)) %>%
-  dplyr::filter(HostOrder != "Didelphimorphia")
+  dplyr::filter(!HostOrder %in% c("Didelphimorphia", "Pilosa"))
 fac_order = eff_all[ eff_all$Type == "Virus-related", ] %>%
   dplyr::group_by(HostOrder) %>%
   dplyr::summarise(TotalPubs = sum(Publications)) %>%
@@ -280,8 +281,19 @@ effort_by_order = ggplot(eff_all[ eff_all$Type == "Virus-related", ]) +
         axis.title=element_text(size=13.5))
 
 ggsave(effort_by_order, file="./output/figures_2021/MS_SIFigure_PublicationEffortByOrder.png", device="png", units="in", width=9, height=6, dpi=600, scale=0.95)
-# 
-# 
+
+
+
+
+
+
+
+
+
+
+
+
+
 # # size by number of species
 # effort_by_order2 = ggplot(eff_all[ eff_all$Type == "Virus-related", ]) +
 #   geom_point(aes(Year, Publications, size=`Number of species`), pch=21, fill="coral2", alpha=0.5) +
