@@ -1,10 +1,7 @@
 
-
 # dependencies and basedir
 setwd("C:/Users/roryj/Documents/PhD/202008_discovery/code/pathogen_discovery/")
 pacman::p_load("dplyr", "magrittr", "stringr", "ggplot2", "inlabru", "INLA", "lemon", "mgcv", "vroom")
-
-
 
 library(sf)
 library(dplyr)
@@ -12,28 +9,41 @@ library(dplyr)
 mam1 = sf::st_read("C:/Users/roryj/Documents/PhD/202008_discovery/data/iucn_range/mammals_freshwater/MAMMALS_FRESHWATER.shp")
 mam2 = sf::st_read("C:/Users/roryj/Documents/PhD/202008_discovery/data/iucn_range/mammals_terrestrial/MAMMALS_TERRESTRIAL_ONLY.shp")
 mam3 = sf::st_read("C:/Users/roryj/Documents/PhD/202008_discovery/data/iucn_range/mammals_marine/MAMMALS_MARINE_ONLY.shp")
+mam4 = sf::st_read("C:/Users/roryj/Documents/PhD/202008_discovery/data/iucn_range/mammals_terrmar/MAMMALS_MARINE_AND_TERRESTRIAL/MAMMALS_MARINE_AND_TERRESTRIAL.shp")
 
 mam1 = mam1 %>% st_drop_geometry() %>% dplyr::select(binomial, order_, family, genus) %>% distinct()
 mam2 = mam2 %>% st_drop_geometry() %>% dplyr::select(binomial, order_, family, genus) %>% distinct()
 mam3 = mam3 %>% st_drop_geometry() %>% dplyr::select(binomial, order_, family, genus) %>% distinct()
+mam4 = mam4 %>% st_drop_geometry() %>% dplyr::select(binomial, order_, family, genus) %>% distinct()
+
+# recode to cetacea
+mam1$order_[ mam1$family %in% c("BALAENIDAE", "BALAENOPTERIDAE", "ZIPHIIDAE", "NEOBALAENIDAE", "DELPHINIDAE", "MONODONTIDAE", 
+                                "ESCHRICHTIIDAE", "KOGIIDAE", "PHOCOENIDAE", "PONTOPORIIDAE", "PHYSETERIDAE", "INIIDAE", "LIPOTIDAE", "PLATANISTIDAE") ] = "CETACEA"
+mam3$order_[ mam3$family %in% c("BALAENIDAE", "BALAENOPTERIDAE", "ZIPHIIDAE", "NEOBALAENIDAE", "DELPHINIDAE", "MONODONTIDAE", 
+                                "ESCHRICHTIIDAE", "KOGIIDAE", "PHOCOENIDAE", "PONTOPORIIDAE", "PHYSETERIDAE", "INIIDAE", "LIPOTIDAE", "PLATANISTIDAE") ] = "CETACEA"
 
 # order level species richness
 mam_o = rbind(mam1, mam2) %>%
   rbind(mam3) %>%
+  rbind(mam4) %>%
   dplyr::group_by(order_) %>%
   dplyr::summarise(SR = n_distinct(binomial)) %>%
   dplyr::rename("Order"=order_) %>%
-  dplyr::mutate(Order = Hmisc::capitalize(tolower(Order)))
+  dplyr::mutate(Order = Hmisc::capitalize(tolower(Order)),
+                Order = replace(Order, Order == "Cetartiodactyla", "Artiodactyla"))
 
 # family level species richness
 mam_f = rbind(mam1, mam2) %>%
   rbind(mam3) %>%
+  rbind(mam4) %>%
   dplyr::group_by(family) %>%
   dplyr::summarise(SR = n_distinct(binomial),
                    Order = head(order_, 1)) %>%
   dplyr::rename("Family"=family) %>%
   dplyr::mutate(Family = Hmisc::capitalize(tolower(Family)),
-                Order = Hmisc::capitalize(tolower(Order)))
+                Order = Hmisc::capitalize(tolower(Order)),
+                Order = replace(Order, Order == "Cetartiodactyla", "Artiodactyla"))
+
 
 
 
@@ -158,30 +168,15 @@ vir_pubs = vir_pubs %>%
   dplyr::left_join(mam_o %>% dplyr::mutate(Order = replace(Order, Order=="Cetartiodactyla", "Artiodactyla")), by=c("HostOrder"="Order"))
 
 
-# # view distribtuion over time and how it relates to expected pub counts given SR
-# vir_pubs = vir_pubs %>%
-#   dplyr::filter(!is.na(HostOrder)) %>%
-#   group_by(Year) %>%
-#   dplyr::mutate(expectedpubs = sum(CumPubs) * (SR / sum(SR)) )
-# 
-# vir_pubs %>% 
-#   ggplot() + 
-#   geom_point(aes(log(SR), logPubs, col=HostOrder), size=3) + 
-#   geom_line(aes(log(SR), log(expectedpubs))) + 
-#   facet_wrap(~Year) + 
-#   theme_bw()
 
 
-
-               
 # ------------ glm for each year --------------
 
 # negbinom
-m1.0 = MASS::glm.nb(VirusCumulative ~ logPubs + log(SR), data=vir_pubs %>% dplyr::filter(Year == 1980))
 m1.1 = MASS::glm.nb(VirusCumulative ~ logPubs + log(SR), data=vir_pubs %>% dplyr::filter(Year == 1990))
 m1.2 = MASS::glm.nb(VirusCumulative ~ logPubs + log(SR), data=vir_pubs %>% dplyr::filter(Year == 2000))
 m1.3 = MASS::glm.nb(VirusCumulative ~ logPubs + log(SR), data=vir_pubs %>% dplyr::filter(Year == 2010))
-m1.4 = MASS::glm.nb(VirusCumulative ~ logPubs + log(SR), data=vir_pubs %>% dplyr::filter(Year == 2020))
+m1.4 = MASS::glm.nb(VirusCumulative ~ logPubs  + log(SR), data=vir_pubs %>% dplyr::filter(Year == 2020))
 
 # pois
 # m1.0 = glm(VirusCumulative ~ logPubs + log(SR), family="poisson", data=vir_pubs %>% dplyr::filter(Year == 1980))
@@ -204,7 +199,7 @@ getCoef = function(m, year){
 coefs_ord = do.call(
   rbind.data.frame,
     list(
-      getCoef(m1.0, year=1980),
+      #getCoef(m1.0, year=1980),
       getCoef(m1.1, year=1990),
       getCoef(m1.2, year=2000), 
       getCoef(m1.3, year=2010),
@@ -342,8 +337,21 @@ vir_pubs = vir_pubs %>%
 
 # ------------ glm for each year --------------
 
+vir_pubs %>%
+  ggplot() + 
+  geom_point(aes(logPubs, VirusCumulative)) + 
+  facet_wrap(~Year, nrow=1)
+vir_pubs %>%
+  ggplot() + 
+  geom_point(aes(log(SR), log(VirusCumulative))) + 
+  facet_wrap(~Year, nrow=1)
+vir_pubs %>%
+  ggplot() + 
+  geom_point(aes(logPubs, log(SR))) + 
+  facet_wrap(~Year, nrow=1)
+
 # ng (for virus species)
-m1.0 = MASS::glm.nb(VirusCumulative ~ logPubs + log(SR) + Order, data=vir_pubs %>% dplyr::filter(Year == 1980))
+#m1.0 = MASS::glm.nb(VirusCumulative ~ logPubs + log(SR) + Order, data=vir_pubs %>% dplyr::filter(Year == 1980))
 m1.1 = MASS::glm.nb(VirusCumulative ~ logPubs + log(SR) + Order, data=vir_pubs %>% dplyr::filter(Year == 1990))
 m1.2 = MASS::glm.nb(VirusCumulative ~ logPubs + log(SR) + Order, data=vir_pubs %>% dplyr::filter(Year == 2000))
 m1.3 = MASS::glm.nb(VirusCumulative ~ logPubs + log(SR) + Order, data=vir_pubs %>% dplyr::filter(Year == 2010))
@@ -370,7 +378,7 @@ getCoef = function(m, year){
 coefs_fam = do.call(
   rbind.data.frame,
   list(
-    getCoef(m1.0, year=1980),
+    #getCoef(m1.0, year=1980),
     getCoef(m1.1, year=1990),
     getCoef(m1.2, year=2000), 
     getCoef(m1.3, year=2010),
