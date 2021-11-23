@@ -1,9 +1,13 @@
 
+# ================================================================================================================
 
-# =================== Heuristic examination of sensitity of ecological inferences to changes in knowledge =====================
+# Gibb et al., "Mammal virus diversity estimates are unstable due to accelerating discovery effort"
+# Script 9: Examining sensitivity of ecological inference to changes in viral diversity estimates over time
+# Replicates the analysis of Mollentze & Streicker (2020 PNAS) which show that order-level viral richness is mainly
+# predicted by predicted by species richness, at multiple time slices (1990 to 2020)
 
-# We replicate the Order-level viral richness analyses of Mollentze et al which show that zoonotic viral richness is mainly predicted 
-# by species richness of each order (i.e. a neutral explanation for patterns of viral diversity in nature)
+# ================================================================================================================
+
 # Fit model to order-level total viral richness data (notably, from our analyses in Figure 2, the most stable metric over time in terms of correlation)
 # Fit a negative binomial GLM considering either logCitations or logCitations + logSR at Order-level (n=17 orders)
 # Examine change in parameter over time
@@ -20,43 +24,46 @@ library(dplyr)
 
 # ------------------ Species richness estimates at Order and Family level from IUCN -------------------
 
-mam1 = sf::st_read("C:/Users/roryj/Documents/PhD/202008_discovery/data/iucn_range/mammals_freshwater/MAMMALS_FRESHWATER.shp")
-mam2 = sf::st_read("C:/Users/roryj/Documents/PhD/202008_discovery/data/iucn_range/mammals_terrestrial/MAMMALS_TERRESTRIAL_ONLY.shp")
-mam3 = sf::st_read("C:/Users/roryj/Documents/PhD/202008_discovery/data/iucn_range/mammals_marine/MAMMALS_MARINE_ONLY.shp")
-mam4 = sf::st_read("C:/Users/roryj/Documents/PhD/202008_discovery/data/iucn_range/mammals_terrmar/MAMMALS_MARINE_AND_TERRESTRIAL/MAMMALS_MARINE_AND_TERRESTRIAL.shp")
+# mam1 = sf::st_read("C:/Users/roryj/Documents/PhD/202008_discovery/data/iucn_range/mammals_freshwater/MAMMALS_FRESHWATER.shp")
+# mam2 = sf::st_read("C:/Users/roryj/Documents/PhD/202008_discovery/data/iucn_range/mammals_terrestrial/MAMMALS_TERRESTRIAL_ONLY.shp")
+# mam3 = sf::st_read("C:/Users/roryj/Documents/PhD/202008_discovery/data/iucn_range/mammals_marine/MAMMALS_MARINE_ONLY.shp")
+# mam4 = sf::st_read("C:/Users/roryj/Documents/PhD/202008_discovery/data/iucn_range/mammals_terrmar/MAMMALS_MARINE_AND_TERRESTRIAL/MAMMALS_MARINE_AND_TERRESTRIAL.shp")
+# 
+# mam1 = mam1 %>% st_drop_geometry() %>% dplyr::select(binomial, order_, family, genus) %>% distinct()
+# mam2 = mam2 %>% st_drop_geometry() %>% dplyr::select(binomial, order_, family, genus) %>% distinct()
+# mam3 = mam3 %>% st_drop_geometry() %>% dplyr::select(binomial, order_, family, genus) %>% distinct()
+# mam4 = mam4 %>% st_drop_geometry() %>% dplyr::select(binomial, order_, family, genus) %>% distinct()
+# 
+# # recode to cetacea
+# mam1$order_[ mam1$family %in% c("BALAENIDAE", "BALAENOPTERIDAE", "ZIPHIIDAE", "NEOBALAENIDAE", "DELPHINIDAE", "MONODONTIDAE", 
+#                                 "ESCHRICHTIIDAE", "KOGIIDAE", "PHOCOENIDAE", "PONTOPORIIDAE", "PHYSETERIDAE", "INIIDAE", "LIPOTIDAE", "PLATANISTIDAE") ] = "CETACEA"
+# mam3$order_[ mam3$family %in% c("BALAENIDAE", "BALAENOPTERIDAE", "ZIPHIIDAE", "NEOBALAENIDAE", "DELPHINIDAE", "MONODONTIDAE", 
+#                                 "ESCHRICHTIIDAE", "KOGIIDAE", "PHOCOENIDAE", "PONTOPORIIDAE", "PHYSETERIDAE", "INIIDAE", "LIPOTIDAE", "PLATANISTIDAE") ] = "CETACEA"
+# 
+# # order level species richness
+# mam_o = rbind(mam1, mam2) %>%
+#   rbind(mam3) %>%
+#   rbind(mam4) %>%
+#   dplyr::group_by(order_) %>%
+#   dplyr::summarise(SR = n_distinct(binomial)) %>%
+#   dplyr::rename("Order"=order_) %>%
+#   dplyr::mutate(Order = Hmisc::capitalize(tolower(Order)),
+#                 Order = replace(Order, Order == "Cetartiodactyla", "Artiodactyla"))
+# 
+# # family level species richness
+# mam_f = rbind(mam1, mam2) %>%
+#   rbind(mam3) %>%
+#   rbind(mam4) %>%
+#   dplyr::group_by(family) %>%
+#   dplyr::summarise(SR = n_distinct(binomial),
+#                    Order = head(order_, 1)) %>%
+#   dplyr::rename("Family"=family) %>%
+#   dplyr::mutate(Family = Hmisc::capitalize(tolower(Family)),
+#                 Order = Hmisc::capitalize(tolower(Order)),
+#                 Order = replace(Order, Order == "Cetartiodactyla", "Artiodactyla"))
 
-mam1 = mam1 %>% st_drop_geometry() %>% dplyr::select(binomial, order_, family, genus) %>% distinct()
-mam2 = mam2 %>% st_drop_geometry() %>% dplyr::select(binomial, order_, family, genus) %>% distinct()
-mam3 = mam3 %>% st_drop_geometry() %>% dplyr::select(binomial, order_, family, genus) %>% distinct()
-mam4 = mam4 %>% st_drop_geometry() %>% dplyr::select(binomial, order_, family, genus) %>% distinct()
-
-# recode to cetacea
-mam1$order_[ mam1$family %in% c("BALAENIDAE", "BALAENOPTERIDAE", "ZIPHIIDAE", "NEOBALAENIDAE", "DELPHINIDAE", "MONODONTIDAE", 
-                                "ESCHRICHTIIDAE", "KOGIIDAE", "PHOCOENIDAE", "PONTOPORIIDAE", "PHYSETERIDAE", "INIIDAE", "LIPOTIDAE", "PLATANISTIDAE") ] = "CETACEA"
-mam3$order_[ mam3$family %in% c("BALAENIDAE", "BALAENOPTERIDAE", "ZIPHIIDAE", "NEOBALAENIDAE", "DELPHINIDAE", "MONODONTIDAE", 
-                                "ESCHRICHTIIDAE", "KOGIIDAE", "PHOCOENIDAE", "PONTOPORIIDAE", "PHYSETERIDAE", "INIIDAE", "LIPOTIDAE", "PLATANISTIDAE") ] = "CETACEA"
-
-# order level species richness
-mam_o = rbind(mam1, mam2) %>%
-  rbind(mam3) %>%
-  rbind(mam4) %>%
-  dplyr::group_by(order_) %>%
-  dplyr::summarise(SR = n_distinct(binomial)) %>%
-  dplyr::rename("Order"=order_) %>%
-  dplyr::mutate(Order = Hmisc::capitalize(tolower(Order)),
-                Order = replace(Order, Order == "Cetartiodactyla", "Artiodactyla"))
-
-# family level species richness
-mam_f = rbind(mam1, mam2) %>%
-  rbind(mam3) %>%
-  rbind(mam4) %>%
-  dplyr::group_by(family) %>%
-  dplyr::summarise(SR = n_distinct(binomial),
-                   Order = head(order_, 1)) %>%
-  dplyr::rename("Family"=family) %>%
-  dplyr::mutate(Family = Hmisc::capitalize(tolower(Family)),
-                Order = Hmisc::capitalize(tolower(Order)),
-                Order = replace(Order, Order == "Cetartiodactyla", "Artiodactyla"))
+mam_o = read.csv("./data/speciesrichness/order_speciesrichness_iucn.csv")
+mam_f = read.csv("./data/speciesrichness/family_speciesrichness_iucn.csv")
 
 
 
@@ -115,9 +122,11 @@ vir = vir[ vir$Year <= endyear, ]
 
 # -------------------- Order-level viral richness and publication effort estimates at each time epoch ------------------------
 
+# time slices in which to summarise data and fit models
 epochs = c(1990, 1995, 2000, 2005, 2010, 2015, 2020)
 dd = data.frame()
 
+# summary data
 for(i in epochs){
   
   # summarise
@@ -149,9 +158,6 @@ for(i in epochs){
   dd = rbind(dd, vir_i)
 }
 
-# ggplot(dd) + 
-#   geom_line(aes(Year, VirRich, col=HostOrder, group=HostOrder))
-
 # combine with species richness data
 dd = left_join(
   dd,
@@ -159,10 +165,13 @@ dd = left_join(
   by=c("HostOrder"="Order")
 )
 
-# log transform
+# log transform metrics
 dd = dd %>% dplyr::mutate(logSR = log(SR), logCitations = log(Citations+1))
 
 
+# --------------- visualising change in key metrics over time --------------------
+
+# factor order for visualising
 host_levels =  dd %>% 
   dplyr::filter(Year == 1990) %>%
   dplyr::arrange(logSR)
@@ -211,7 +220,7 @@ pc1 = gridExtra::grid.arrange(p1, p2, p3, nrow=1, widths=c(1, 0.8, 0.8))
 
 
 
-# -------------------- Fit models comparing AIC and R2 ------------------
+# -------------------- Fit negative binomial GLMs comparing AIC and R2 ------------------
 
 fitNBModel = function(year, data){
   
@@ -249,7 +258,9 @@ results = do.call(
   lapply(c(1990, 1995, 2000, 2005, 2010, 2015, 2020), fitNBModel, data=dd)
 )
 
-# visualise
+
+# ------------------- visualise --------------------
+
 p4 = results %>%
   dplyr::filter(param != "(Intercept)") %>%
   dplyr::mutate(param = replace(param, param == "logCitations", "Virus-related citations (log)"),
@@ -274,34 +285,6 @@ p4 = results %>%
         axis.title = element_text(size=11),
         legend.text = element_text(size=10.5)) +
   scale_color_viridis_d(option="F", direction=-1, end=0.8)
-
-# p5 = results %>%
-#   dplyr::select(year, R2_withoutSR, R2_withSR) %>%
-#   distinct() %>%
-#   reshape2::melt(id.vars=1) %>%
-#   dplyr::mutate(variable = as.vector(variable), 
-#                 variable = replace(variable, variable == "R2_withoutSR", "logCitations"),
-#                 variable = replace(variable, variable == "R2_withSR", "logCitations + logSR"),
-#                 variable = factor(variable, levels=c("logCitations + logSR", "logCitations"), ordered=TRUE),
-#                 year = factor(year, levels=seq(from=2020, to=1990, by=-5), ordered=TRUE)) %>%
-#   dplyr::rename("Model"=variable) %>%
-#   ggplot() + 
-#   #geom_point(aes(factor(year), value, group=Model, col=Model), position=position_dodge(width=0.5), size=3.5) + 
-#   geom_point(aes(factor(year), value, group=Model, pch=Model), position=position_dodge(width=0.6), size=4, col="skyblue4", fill="skyblue4") + 
-#   ylab("R-squared") + xlab("Year")  + 
-#   theme_classic() +
-#   theme(legend.position=c(0.33, 0.86)) + 
-#   #scale_color_viridis_d(begin=0.2, end=0.7, guide=guide_legend(reverse=TRUE)) + 
-#   scale_shape_discrete(guide=guide_legend(reverse=TRUE)) + 
-#   theme(legend.title=element_text(size=10),
-#         panel.grid.major = element_line(color="grey92"),
-#         plot.title=element_text(hjust=0.5, size=13),
-#         strip.text = element_text(size=11),
-#         axis.text = element_text(size=10.5),
-#         axis.title = element_text(size=11),
-#         legend.text = element_text(size=9.5),
-#         legend.background = element_blank()) + 
-#   coord_flip()
   
 p5 = results %>%
   dplyr::select(year, R2_withoutSR, R2_withSR) %>%
@@ -315,7 +298,7 @@ p5 = results %>%
   dplyr::rename("Model"=variable) %>%
   ggplot() +
   #geom_point(aes(factor(year), value, group=Model, col=Model), position=position_dodge(width=0.5), size=3.5) +
-  geom_point(aes(factor(year), value, group=Model, pch=Model), position=position_dodge(width=0.6), size=3.2, col="skyblue4", fill="skyblue4") +
+  geom_point(aes(factor(year), value, group=Model, pch=Model), position=position_dodge(width=0.6), size=3.6, col="skyblue4", fill="skyblue4") +
   ylab("R-squared") + xlab("Year")  +
   theme_classic() +
   theme(legend.position=c(0.3, 0.25)) +
@@ -331,10 +314,11 @@ p5 = results %>%
         legend.background = element_blank()) 
 
 pc2 = gridExtra::grid.arrange(p4, p5, ncol=2, widths=c(0.9, 0.5))
-#ggsave(pc2, file="./output/figures_2021/SI_VirRichbySR.png", device="png", units="in", width=10.5, height=4, dpi=600)
 
 
-# combine
+
+# -------------- create combined figure -----------------------
+
 pc_full = gridExtra::grid.arrange(pc1, pc2, nrow=2, heights=c(0.7, 0.9))
 pc_full = ggpubr::as_ggplot(pc_full)  +
   cowplot::draw_plot_label(label = c("a", "b", "c", "d", "e"), 

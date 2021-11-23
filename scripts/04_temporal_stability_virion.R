@@ -1,7 +1,14 @@
 
 
 
-# ============================= Use "time slice" correlation coefficients to examine temporal stability of virus diversity ==========================
+# ========================================= ======================================================
+
+# Gibb et al., "Mammal virus diversity estimates are unstable due to accelerating discovery effort"
+# Script 4: Examine temporal stability of relative virus diversity estimates across species/groups
+
+# ================================================================================================
+
+
 
 # root dir and dependencies
 # dependencies and basedir
@@ -53,7 +60,7 @@ vir = vir[ vir$Year <= endyear, ]
 
 
 
-# Calculate discovery information for species
+# ------------------ Calculate discovery information for species --------------------
 
 # total richness
 tr = vir %>%
@@ -160,8 +167,6 @@ for(i in orders){
   stabx$Group = i
   stabos = rbind(stabos, stabx)
 }
-
-
 
 
 
@@ -277,21 +282,6 @@ p2 = ggplot(stab_ord) +
         legend.text = element_text(size=10.5),
         axis.title.y = element_text(hjust = -4.6, size=13, color="black"))
 
-# p2 = ggplot(stab_all[ !stab_all$Group %in% c("Species", "Order", "Family"), ]) + 
-#   geom_line(aes(Year, SpearmanCoef, col=Group), size=0.8) +
-#   geom_vline(xintercept=2010, lty=2) + 
-#   theme_minimal() +
-#   ylim(0, 1.0) +
-#   ylab("") +
-#   scale_color_manual(values=scale) +
-#   theme(legend.position=c(0.5, 0.1),
-#         legend.title = element_blank(),
-#         axis.text = element_text(size=11),
-#         axis.title.x = element_text(size=13),
-#         legend.text = element_text(size=10),
-#         axis.title.y = element_text(size=13, color="white")) + 
-#   guides(color=guide_legend(nrow=2))
-
 # combine and annotate
 p_comb = gridExtra::grid.arrange(p1, p2, ncol=1, heights=c(0.8, 1)) 
 pp = ggpubr::as_ggplot(p_comb)  +
@@ -299,123 +289,5 @@ pp = ggpubr::as_ggplot(p_comb)  +
                            x = c(0.15, 0.15), y = c(0.99, 0.55))
 ggsave(pp, file="./output/figures_2021/MS_Figure2_Stability_types.png", dpi=600, height=8, width=4.4, units="in")
 
-
-
-
-# ===================== Combine and plot with mean species level viral richness =========================
-# 
-# # combine and plot all
-# stab_all = rbind(stab, stab_oa, stab_fa, stabos)
-# 
-# # Across mammals
-# d1 = stab_all[ stab_all$Group %in% c("Species", "Order", "Family"), ] %>%
-#   dplyr::mutate(Group = factor(Group, levels = c("Order", "Family", "Species"), ordered=TRUE))
-# p1 = ggplot(d1) + 
-#   geom_line(aes(Year, SpearmanCoef, col=Group), size=0.8) +
-#   geom_vline(xintercept=2010, lty=2) + 
-#   theme_minimal() +
-#   ylim(0, 1.0) +
-#   ylab("Correlation with viral richness in 2010") +
-#   scale_color_viridis_d(option="magma", begin=0, end=0.8) +
-#   theme(legend.position=c(0.8, 0.2),
-#         legend.title = element_blank(),
-#         axis.title.x = element_blank(),
-#         axis.text = element_text(size=11),
-#         legend.text = element_text(size=10.5),
-#         axis.title.y = element_text(hjust = -9, size=13))
-# 
-# 
-# # At the Order level with colourblind friendly palette
-# pal <- c("#88CCEE", "#CC6677", "#DDCC77", "#117733", "#332288", "#AA4499", 
-#          "#44AA99", "#999933", "#882255", "#661100", "#6699CC", "#888888")
-# scales::show_col(pal)
-# scale = pal[ c(1, 4:8) ]
-# p2 = ggplot(stab_all[ !stab_all$Group %in% c("Species", "Order", "Family"), ]) + 
-#   geom_line(aes(Year, SpearmanCoef, col=Group), size=0.8) +
-#   geom_vline(xintercept=2010, lty=2) + 
-#   theme_minimal() +
-#   ylim(0.2, 1.0) +
-#   ylab("") +
-#   scale_color_manual(values=scale) +
-#   theme(legend.position="bottom",
-#         legend.title = element_blank(),
-#         axis.text = element_text(size=11),
-#         axis.title.x = element_text(size=13),
-#         legend.text = element_text(size=10.5),
-#         axis.title.y = element_text(size=13, color="white"))
-# 
-# p2 = ggplot(stab_all[ !stab_all$Group %in% c("Species", "Order", "Family"), ]) + 
-#   geom_line(aes(Year, SpearmanCoef, col=Group), size=0.8) +
-#   geom_vline(xintercept=2010, lty=2) + 
-#   theme_minimal() +
-#   ylim(0, 1.0) +
-#   ylab("") +
-#   scale_color_manual(values=scale) +
-#   theme(legend.position=c(0.5, 0.1),
-#         legend.title = element_blank(),
-#         axis.text = element_text(size=11),
-#         axis.title.x = element_text(size=13),
-#         legend.text = element_text(size=10.5),
-#         axis.title.y = element_text(size=13, color="white")) + 
-#   guides(color=guide_legend(nrow=2))
-# 
-# # combine and annotate
-# p_comb = gridExtra::grid.arrange(p1, p2, ncol=1, heights=c(0.8, 1)) 
-# pp = ggpubr::as_ggplot(p_comb)  +
-#   cowplot::draw_plot_label(label = c("a", "b"), size = 20, 
-#                            x = c(0.15, 0.15), y = c(0.99, 0.55))
-# ggsave(pp, file="./output/figures/MS_Figure2_Stability_MeanVR.png", dpi=600, height=8, width=4.3, units="in")
-# 
-
-
-
-# =================== Bump plot of Order ranks =====================
-
-# get ranks in 5 year intervals
-yearrank = function(x){
-  bx = spso[ spso$Year == x, ] %>%
-    dplyr::arrange(desc(ViralRichness)) 
-  bx$Rank = rank(bx$ViralRichness)
-  bx
-}
-bpd = do.call(rbind.data.frame, lapply(seq(1960, 2010, by=5), yearrank))
-
-bp = ggplot(bpd) + 
-  geom_point(aes(Year, Rank, col=Host, group=Host), size=3) + 
-  geom_line(aes(Year, Rank, col=Host, group=Host), alpha=0.5, size=1) + 
-  theme_minimal() +
-  scale_y_continuous(breaks=1:20, labels=1:20) + 
-  geom_text(data = bpd[ bpd$Year == 2010, ], aes(x = 2012, y=Rank, label=Host), size = 4.5, hjust = 0) +
-  theme(legend.position="none") + 
-  scale_x_continuous(limits=c(1960, 2022), breaks=seq(1960, 2010, by=10), labels=seq(1960, 2010, by=10)) +
-  theme(axis.text = element_text(size=11.5),
-        axis.title = element_text(size=13)) +
-  ylab("Viral diversity rank")
-ggsave(bp, file="./output/figures/SI_OrderRanks_BumpChart.png", dpi=600, height=8, width=9.5, units="in", scale=0.9)
-
-
-
-
-# get ranks in 5 year intervals
-yearrank = function(x){
-  bx = sps_oa[ sps_oa$Year == x, ] %>%
-    dplyr::arrange(desc(ViralRichness)) 
-  bx$Rank = rank(bx$ViralRichness)
-  bx
-}
-bpd = do.call(rbind.data.frame, lapply(seq(1960, 2010, by=5), yearrank))
-
-bp = ggplot(bpd) + 
-  geom_point(aes(Year, Rank, col=Host, group=Host), size=3) + 
-  geom_line(aes(Year, Rank, col=Host, group=Host), alpha=0.5, size=1) + 
-  theme_minimal() +
-  scale_y_continuous(breaks=1:20, labels=1:20) + 
-  geom_text(data = bpd[ bpd$Year == 2010, ], aes(x = 2012, y=Rank, label=Host), size = 4.5, hjust = 0) +
-  theme(legend.position="none") + 
-  scale_x_continuous(limits=c(1960, 2022), breaks=seq(1960, 2010, by=10), labels=seq(1960, 2010, by=10)) +
-  theme(axis.text = element_text(size=11.5),
-        axis.title = element_text(size=13)) +
-  ylab("Viral diversity rank")
-ggsave(bp, file="./output/figures/SI_OrderRanks_BumpChart_MeanVR.png", dpi=600, height=8, width=9.5, units="in", scale=0.9)
 
 

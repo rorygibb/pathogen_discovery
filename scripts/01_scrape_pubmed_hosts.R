@@ -1,5 +1,12 @@
 
 
+# ========================================= ======================================================
+
+# Gibb et al., "Mammal virus diversity estimates are unstable due to accelerating discovery effort"
+# Script 1: Scrapes the PubMed database for citation counts for all host species within VIRION
+
+# ================================================================================================
+
 
 # root dir and dependencies
 # dependencies and basedir
@@ -15,7 +22,6 @@ virion = virion %>%
   dplyr::select(HostTaxID, Host, HostOrder, HostFamily) %>% 
   distinct() %>%
   dplyr::filter(!is.na(Host))
-
 
 
 
@@ -59,6 +65,7 @@ do.call(rbind.data.frame, lapply(list.files("./output/host_synonyms/perhost/", f
 
 
 
+
 # ================= run pubmed scrape for annual publication counts ==============
 
 # # unique host species separated by host synonyms
@@ -73,6 +80,7 @@ syns = read.csv("./output/host_synonyms/hostsyns_VIRION.csv")
 syns$Synonym[ syns$Synonym == "lookup fail" ] = syns$Host[ syns$Synonym == "lookup fail" ]
 syns = syns %>% dplyr::rename("HostSynonyms"=Synonym)
 spp = syns
+
 
 
 # ======================= function to extract for each species ====================
@@ -164,16 +172,9 @@ save_file = paste(output_loc, "PubMed_HostsEffort_PerYear_1930_VIRION2.csv", sep
 # for all host species get time series of publication effort (axis axis == impossible to lookup)
 species_vec = unique(spp$Host)
 species_vec = species_vec[ !species_vec %in% c("axis axis", "indicator indicator", "canis lupus familiaris")]
-#species_vec = species_vec[ !species_vec %in% c("Axis axis", "Indicator indicator", "Canis lupus familiaris")]
-
-# re-run for lookup error
-rr = read.csv(paste(output_loc, "host_effort/PubMed_HostsEffort_PerYear_1930_VIRION.csv", sep=""), stringsAsFactors = FALSE) %>%
-  dplyr::filter(Note != "Lookup error")
-species_vec = species_vec[ !species_vec %in% rr$Host ]
-species_vec = species_vec[ species_vec != "bos taurus x bison bison" ]
 
 # append each new query to csv
-for(i in 6:length(species_vec)){
+for(i in 1:length(species_vec)){
 
   # run query (5 attempts)
   cat(paste(i, "...", sep=""))
@@ -220,11 +221,6 @@ save_file = paste(output_loc, "PubMed_HostsEffort_PerYear_VirusRelated_VIRION.cs
 species_vec = unique(spp$Host)
 species_vec = species_vec[ !species_vec %in% c("axis axis", "indicator indicator", "canis lupus familiaris")]
 
-#re-run for lookup error
-rr = read.csv(paste(output_loc, "/host_effort/PubMed_HostsEffort_PerYear_VirusRelated_VIRION.csv", sep=""), stringsAsFactors = FALSE) %>%
-  dplyr::filter(Note != "Lookup error")
-species_vec = species_vec[ !species_vec %in% rr$Host ]
-
 # append each new query to csv
 for(i in 1:length(species_vec)){
   
@@ -257,29 +253,6 @@ for(i in 1:length(species_vec)){
     write.table(resx, save_file, append=TRUE, sep=",", col.names=FALSE, row.names=FALSE, quote=TRUE) # append
   }
 }
-
-
-
-
-# =========================== Create compiled data for other projects =========================
-
-# hx = read.csv("./output/host_effort/PubMed_HostsEffort_PerYear_19302020.csv") %>%
-#   dplyr::group_by(Host) %>%
-#   dplyr::summarise(Pubs_All = sum(NumPubs))
-# 
-# hy = read.csv("./output/host_effort/PubMed_HostsEffort_PerYear_VirusRelated_19302020.csv") %>%
-#   dplyr::group_by(Host) %>%
-#   dplyr::summarise(Pubs_VirusRelated = sum(NumPubs))
-# 
-# effort = left_join(hx, hy)
-# effort = left_join(effort, spp[ !duplicated(spp$Host), c("Host", "HostOrder", "HostFamily")])
-# write.csv(effort, "./output/host_effort/PubMed_HostCounts_Total_CLOVER.csv", row.names=FALSE)
-# 
-# ggplot(effort) + 
-#   geom_boxplot(aes(HostOrder, Pubs_VirusRelated)) +
-#   theme(axis.text.x = element_text(angle=90))
-
-
 
 
 

@@ -1,6 +1,12 @@
 
 
-# ===================== Run discovery curves at Order-level ====================
+# ========================================= ======================================================
+
+# Gibb et al., "Mammal virus diversity estimates are unstable due to accelerating discovery effort"
+# Script 2: Fit Order-level discovery curves (GAMs) to viral discovery data over time
+
+# ================================================================================================
+
 
 # dependencies and basedir
 setwd("C:/Users/roryj/Documents/PhD/202008_discovery/code/pathogen_discovery/")
@@ -58,19 +64,6 @@ vir = do.call(rbind.data.frame, list(vp, vg, vc))
 endyear = 2018
 vir = vir[ vir$Year <= endyear, ]
 
-
-
-# --------------- specify data subset: include or exclude ICTV ratified viruses --------------
-
-# ictv_filter = FALSE
-# 
-# if(ictv_filter){ 
-#   vir = vir[ vir$ICTVRatified == TRUE, ]
-#   ictv_flag = "ictvratified"
-# } else{
-#     ictv_flag = "allviruses_genus"
-#     vir$Virus = vir$VirusGenus
-#   }
 
 
 
@@ -225,8 +218,6 @@ if(model=="domestic"){
 if(model == "wild"){
   datax = curves_wild
   modname = "wild"
-  # orders = c("primates", "lagomorpha", "rodentia", "carnivora", "artiodactyla", "chiroptera")
-  # fac_order = c("Cetartiodactyla", "Rodentia", "Primates", "Carnivora", "Chiroptera", "Lagomorpha")
   orders = c("primates", "lagomorpha", "perissodactyla", "rodentia", "carnivora", "artiodactyla", "chiroptera", "eulipotyphla")
   fac_order = c("artiodactyla", "rodentia", "chiroptera", "primates", "carnivora", "perissodactyla", "eulipotyphla", "lagomorpha")
 }

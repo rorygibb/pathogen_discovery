@@ -1,10 +1,14 @@
 
 
+# ========================================= ======================================================
+
+# Gibb et al., "Mammal virus diversity estimates are unstable due to accelerating discovery effort"
+# Script 3: Fit species-level viral discovery GAMs for the top 50 most virus-rich mammal species
+
+# ================================================================================================
 
 
 
-
-# ====================== Generate species viral discovery rate curves for mammals at the Order level =====================
 
 # fit GAM curves across time epochs to examine changes in trends 
 
@@ -39,11 +43,6 @@ vir = virion %>%
                 CLOVERflag = ifelse(Database %in% c("EID2", "Shaw", "GMPD2", "HP3"), TRUE , FALSE)) %>%
   dplyr::filter(ICTVRatified | PredictFlag)
 
-# # temporary fix
-# vir$HostOrder[ vir$HostFamily %in% c("balaenidae", "balaenopteridae", "delphinidae",
-#                                      "eschrichtiidae", "monodontidae", "phocoenidae",
-#                                      "physeteridae", "ziphiidae")] = "cetacea"
-
 # set years for separate subsets of the data
 vp = vir %>%
   dplyr::filter(Database == "PREDICT") %>%
@@ -70,7 +69,7 @@ tr = vir %>%
 
 
 
-# Calculate discovery information for species
+# ---------------------- Calculate discovery information for species -------------------------
 
 # unique associations by year
 dd = vir %>%
@@ -242,8 +241,8 @@ raw_data = datax[ datax$Host %in% r2$Host & datax$Year <= 2018, ]
 raw_data = left_join(raw_data, r2[ !duplicated(r2$Host), c("Host", "Host2")])
 raw_data$Host2 = factor(raw_data$Host2, levels=unique(r2$Host2), ordered=TRUE)
 
+# first 25 species
 curve_plot = ggplot() + 
-  #geom_ribbon(data=r2[ -which(r2$Year < 1960 & r2$Order %in% c("Perissodactyla")), ], aes(x=Year, ymin=lower, ymax=upper), alpha=0.3, fill="grey50", col=NA, size=0.05) +
   geom_ribbon(data=r2[ r2$Host2 %in% unique(r2$Host2)[1:25], ], aes(x=Year, ymin=lower, ymax=upper), alpha=0.25, fill="skyblue4", col=NA, size=0.05) +
   geom_point(data=raw_data[ raw_data$Host2 %in% unique(r2$Host2)[1:25], ], aes(x=Year, y=Discovered), col="grey55", size=0.3) +
   geom_line(data=r2[ r2$Host2 %in% unique(r2$Host2)[1:25], ], aes(x=Year, y=fitted, group=Host2, col=sig_incr), size=1.2) +
@@ -251,7 +250,6 @@ curve_plot = ggplot() +
   theme_classic() +
   scale_color_viridis_d(begin=0.25, end=0.75) +
   lemon::facet_rep_wrap(~Host2, ncol=5, nrow=5, scales="free_y") +
-  #facet_wrap(~Order, ncol=1, scales="free_y", strip.position = "right") +
   theme(strip.background = element_blank(),
         legend.position="none",
         strip.text = element_text(size=13),
@@ -262,8 +260,8 @@ curve_plot = ggplot() +
   scale_x_continuous(breaks=seq(1940, 2000, by=20), seq(1940, 2000, by=20), name="Year")
 ggsave(curve_plot, file="./output/figures_2021/SI_Figure_SpeciesGAMs_A.png", device="png", units="in", width=11, height=10, dpi=300)
 
+# next 25 species
 curve_plot2 = ggplot() + 
-  #geom_ribbon(data=r2[ -which(r2$Year < 1960 & r2$Order %in% c("Perissodactyla")), ], aes(x=Year, ymin=lower, ymax=upper), alpha=0.3, fill="grey50", col=NA, size=0.05) +
   geom_ribbon(data=r2[ r2$Host2 %in% unique(r2$Host2)[26:50], ], aes(x=Year, ymin=lower, ymax=upper), alpha=0.25, fill="skyblue4", col=NA, size=0.05) +
   geom_point(data=raw_data[ raw_data$Host2 %in% unique(r2$Host2)[26:50], ], aes(x=Year, y=Discovered), col="grey55", size=0.3) +
   geom_line(data=r2[ r2$Host2 %in% unique(r2$Host2)[26:50], ], aes(x=Year, y=fitted, group=Host2, col=sig_incr), size=1.2) +
@@ -271,7 +269,6 @@ curve_plot2 = ggplot() +
   theme_classic() +
   scale_color_viridis_d(begin=0.25, end=0.75) +
   lemon::facet_rep_wrap(~Host2, ncol=5, nrow=5, scales="free_y") +
-  #facet_wrap(~Order, ncol=1, scales="free_y", strip.position = "right") +
   theme(strip.background = element_blank(),
         legend.position="none",
         strip.text = element_text(size=13),

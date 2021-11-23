@@ -1,6 +1,11 @@
 
+# ========================================= ======================================================
 
-# ====================== Overall cumulative trends in species-level viral discovery and effort =====================
+# Gibb et al., "Mammal virus diversity estimates are unstable due to accelerating discovery effort"
+# Script 5: Visualises overall (across mammals) trends in viral discovery and publication counts
+
+# ================================================================================================
+
 
 # root dir and dependencies
 # dependencies and basedir
@@ -52,7 +57,7 @@ vir = vir[ vir$Year <= endyear, ]
 
 
 
-# Calculate discovery information for species
+# -----------------------  Calculate discovery information for species --------------------------
 
 # total richness
 tr = vir %>%
@@ -231,19 +236,6 @@ effort = rbind(hx, hy) %>%
 dom = read.csv("./data/clovert/domestic_status/HostLookup_Domestic.csv")
 effort$Domestic = ifelse(effort$Host %in% dom$Host, TRUE, FALSE)
 
-# plot effort over time
-# eff_all = effort[ effort$Year < 2021 & effort$Domestic == FALSE, ] %>%
-#   dplyr::group_by(Type, Year) %>%
-#   dplyr::summarise(Publications = sum(NumPubs))
-# ggplot(eff_all) +
-#   geom_point(aes(Year, Publications)) +
-#   facet_wrap(~Type, nrow=1, scales="free_y")
-
-# ef2 = rbind(eff_all, data.frame(Year = 2020.01, Publications=0, Type = unique(eff_all$Type)))
-# ggplot(ef2) +
-#   geom_polygon(aes(Year, Publications, fill=Type)) +
-#   theme_minimal()
-
 
 # effort by Order
 eff_all = effort[ effort$Year < 2019 & effort$Domestic == FALSE, ] %>%
@@ -288,89 +280,4 @@ ggsave(effort_by_order, file="./output/figures_2021/MS_SIFigure_PublicationEffor
 
 
 
-
-
-
-
-
-
-# # size by number of species
-# effort_by_order2 = ggplot(eff_all[ eff_all$Type == "Virus-related", ]) +
-#   geom_point(aes(Year, Publications, size=`Number of species`), pch=21, fill="coral2", alpha=0.5) +
-#   geom_line(stat="smooth", aes(Year, Publications, group=facet), method="gam", se=FALSE, alpha=0.6, size=0.6, col="blue") +
-#   lemon::facet_rep_wrap(~facet, scales="free_y") +
-#   theme_classic() +
-#   theme(strip.background = element_blank()) +
-#   scale_size_continuous(range=c(0.2, 4)) +
-#   ylab("Virus-related publications") +
-#   theme(strip.background = element_blank(),
-#         legend.position="bottom",
-#         strip.text = element_text(size=12),
-#         axis.text.y = element_text(size=11),
-#         axis.text.x = element_text(size=12),
-#         axis.title=element_text(size=13.5))
-# 
-# ggsave(effort_by_order2, file="./output/figures/MS_SIFigure_PublicationEffortByOrder_NSpecies.png", device="png", units="in", width=9, height=6.8, dpi=600, scale=0.95)
-# 
-# 
-# effort_by_order3 = ggplot(eff_all[ eff_all$Type == "Virus-related", ]) +
-#   geom_point(aes(Year, Publications, size=`Number of families`), pch=21, fill="coral2", alpha=0.5) +
-#   geom_line(stat="smooth", aes(Year, Publications, group=facet), method="gam", se=FALSE, alpha=0.6, size=0.6, col="blue") +
-#   lemon::facet_rep_wrap(~facet, scales="free_y") +
-#   theme_classic() +
-#   theme(strip.background = element_blank()) +
-#   scale_size_continuous(range=c(0.2, 4)) +
-#   ylab("Virus-related publications") +
-#   theme(strip.background = element_blank(),
-#         legend.position="bottom",
-#         strip.text = element_text(size=12),
-#         axis.text.y = element_text(size=11),
-#         axis.text.x = element_text(size=12),
-#         axis.title=element_text(size=13.5))
-# 
-# 
-# ##method.args=list(family="poisson"))
-
-
-
-# ================= Taxonomic breadth of discovery ====================
-
-# 
-tb1 = curves %>%
-  dplyr::filter(Discovered > 0) %>%
-  dplyr::group_by(Year) %>%
-  dplyr::summarise(HostRange_Species = n_distinct(Host),
-                   HostRange_Family = n_distinct(HostFamily))
-ggplot(tb1) + 
-  geom_point(aes(Year, HostRange_Family), pch=21, fill=NA) + 
-  theme_classic() +
-  geom_line(stat="smooth", aes(Year, HostRange_Family), method="gam", method.args=list(family="poisson"))
-
-ggplot(tb1) + 
-  geom_point(aes(Year, HostRange_Family), pch=21, fill=NA) + 
-  theme_classic() +
-  geom_smooth(aes(Year, HostRange_Family), method="gam", method.args=list(family="poisson"))
-ggplot(tb1) + 
-  geom_point(aes(Year, HostRange_Species), pch=21, fill=NA) + 
-  theme_classic() +
-  geom_smooth(aes(Year, HostRange_Species), method="glm", method.args=list(family="poisson"))
-
-
-tb2 = curves[ curves$HostOrder %in% c("Primates", "Rodentia", "Carnivora", "Chiroptera", "Cetartiodactyla", "Lagomorpha"), ] %>%
-  dplyr::filter(Discovered > 0) %>%
-  dplyr::group_by(HostOrder, Year) %>%
-  dplyr::summarise(HostRange_Species = n_distinct(Host),
-                   HostRange_Family = n_distinct(HostFamily))
-
-ggplot(tb2) + 
-  geom_point(aes(Year, HostRange_Species), pch=21, fill=NA) + 
-  theme_classic() +
-  geom_smooth(aes(Year, HostRange_Species), method="gam", method.args=list(family="poisson")) + 
-  facet_wrap(~HostOrder, scales="free_y")
-
-ggplot(tb2) + 
-  geom_point(aes(Year, HostRange_Family), pch=21, fill=NA) + 
-  theme_classic() +
-  geom_smooth(aes(Year, HostRange_Family), method="gam", method.args=list(family="poisson")) + 
-  facet_wrap(~HostOrder, scales="free_y")
 

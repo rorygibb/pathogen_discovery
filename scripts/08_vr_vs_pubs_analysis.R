@@ -1,4 +1,12 @@
 
+# ================================================================================================
+
+# Gibb et al., "Mammal virus diversity estimates are unstable due to accelerating discovery effort"
+# Script 8: Visualise the correlation of viral richness and cumulative publication counts over time
+# at several taxonomic levels
+
+# ================================================================================================
+
 
 # dependencies and basedir
 setwd("C:/Users/roryj/Documents/PhD/202008_discovery/code/pathogen_discovery/")
@@ -17,12 +25,10 @@ domestic = read.csv("./data/clovert/domestic_status/HostLookup_Domestic.csv", st
 lab = c("macaca mulatta", "macaca fasicularis")
 
 # publiations
-#pubs = read.csv("./output/host_effort/PubMed_HostsEffort_PerYear_1930_VIRION.csv") %>%
 pubs = read.csv("./output/host_effort/PubMed_HostsEffort_PerYear_VirusRelated_VIRION.csv") %>%
   dplyr::filter(!Host %in% c(domestic$Host, lab))
 
 # VIRION
-#virion = vroom::vroom("./data/virion/pre_push/Virion.csv.gz")
 virion = vroom::vroom("./data/virion/Virion.csv.gz")
 
 # build virion and add flag for whether resolved to PREDICT internal tax
@@ -108,13 +114,6 @@ pc = expand.grid(unique(pubs$Host), 1930:endyear) %>%
   
 # combine with virus curves
 vir_pubs = left_join(pc, curveso %>% dplyr::select(HostOrder, Year, VirusCumulative) %>% dplyr::mutate(HostOrder = Hmisc::capitalize(HostOrder)))
-
-# # result at order level
-# res_order = vir_pubs %>%
-#   dplyr::filter(Year > 1969) %>%
-#   dplyr::group_by(Year) %>%
-#   dplyr::summarise(rho = cor.test(CumPubs, VirusCumulative, method = "spearman")$estimate) %>%
-#   dplyr::mutate(model = "Order")
 
 reso = data.frame()
 for(i in 1970:endyear){
@@ -272,31 +271,6 @@ for(i in 1970:endyear){
 }
 ress$model = "Species"
 
-# # result at species level for key orders
-# res_species_o = vir_pubs %>%
-#   dplyr::left_join(vir %>% dplyr::select(Host, HostOrder) %>% dplyr::mutate(Host = Hmisc::capitalize(Host)) %>% distinct()) %>%
-#   dplyr::mutate(HostOrder = Hmisc::capitalize(HostOrder)) %>%
-#   dplyr::filter(HostOrder %in% c("Chiroptera", "Primates", "Rodentia", "Artiodactyla", "Carnivora", "Lagomorpha")) %>%
-#   dplyr::filter(Year > 1969) %>%
-#   dplyr::group_by(HostOrder, Year) %>%
-#   dplyr::summarise(rho = cor.test(CumPubs, VirusCumulative, method = "spearman")$estimate) %>%
-#   dplyr::mutate(model = "Species_Order")
-# 
-# resso1 = data.frame()
-# for(i in 1970:2018){
-#   rr = vir_pubs[ vir_pubs$Year == i, ] %>%
-#     dplyr::filter(VirusCumulative > 0) %>%
-#     dplyr::left_join(vir %>% dplyr::select(Host, HostOrder) %>% dplyr::mutate(Host = Hmisc::capitalize(Host)) %>% distinct()) %>%
-#     dplyr::mutate(HostOrder = Hmisc::capitalize(HostOrder)) %>%
-#     dplyr::filter(HostOrder %in% c("Chiroptera", "Primates", "Rodentia", "Artiodactyla", "Carnivora", "Lagomorpha")) %>%
-#     dplyr::group_by(HostOrder) %>%
-#     dplyr::summarise(rho = cor.test(CumPubs, VirusCumulative, method = "spearman")$estimate) %>%
-#     dplyr::mutate(model = "Species_Order", Year=i)
-#   resso1 = rbind(resso1, rr)
-# }
-# resso1$model = "Species_Order"
-
-
 
 # ========== visualise these results ==============
 
@@ -320,10 +294,3 @@ p1 = rbind(reso, resf, ress) %>%
   scale_color_viridis_d(option="F", end=0.8)
 
 ggsave(p1, file="./output/figures_2021/SI_PublicationViralRichnessCorrelation.png", device="png", units="in", width=6, height=5)
-
-
-
-n_distinct(vir$Host)
-n_distinct(vir$HostOrder)
-
-

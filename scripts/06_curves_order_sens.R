@@ -1,6 +1,12 @@
 
 
-# ===================== Sensitivity analysis of Order-level discovery curves ====================
+# ========================================= ======================================================
+
+# Gibb et al., "Mammal virus diversity estimates are unstable due to accelerating discovery effort"
+# Script 6: Tests sensitivity of order-level discovery curves to different definitions of viral richness
+
+# ================================================================================================
+
 
 # dependencies and basedir
 setwd("C:/Users/roryj/Documents/PhD/202008_discovery/code/pathogen_discovery/")
@@ -38,11 +44,6 @@ vir = virion %>%
   dplyr::filter(!is.na(ReleaseYear) | !is.na(PublicationYear) | !is.na(CollectionYear)) %>%
   dplyr::mutate(PredictFlag = str_detect(Virus, "predict\\_"),
                 CLOVERflag = ifelse(Database %in% c("EID2", "Shaw", "GMPD2", "HP3"), TRUE , FALSE)) 
-# 
-# # temporary fix
-# vir$HostOrder[ vir$HostFamily %in% c("balaenidae", "balaenopteridae", "delphinidae",
-#                                      "eschrichtiidae", "monodontidae", "phocoenidae",
-#                                      "physeteridae", "ziphiidae")] = "cetacea"
 
 # set years for separate subsets of the data
 vp = vir %>%
@@ -239,13 +240,6 @@ for(sens in c("detection", "ICTV", "genus")){
       ggtitle("Viral genera")
   }
 }
-
-
-# p_comb = gridExtra::grid.arrange(ictv_plot, genus_plot, ncol=2) 
-# pp = ggpubr::as_ggplot(p_comb)  +
-#   cowplot::draw_plot_label(label = c("a", "b"), size = 25, 
-#                            x = c(0.01, 0.51), y = c(1, 1))
-# ggsave(pp, file="./output/figures_2021/SI_OrderCurves_VirTaxSensitivity.png", dpi=600, height=7, width=12, units="in")
 
 p_comb = gridExtra::grid.arrange(detection_plot, ictv_plot, genus_plot, ncol=3) 
 pp = ggpubr::as_ggplot(p_comb)  +
