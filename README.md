@@ -8,6 +8,8 @@ VIRION database (public release v0.2.1; https://github.com/viralemergence/virion
 
 ↳ data → clovert → domestic_status (list of domestication status for species)
 
+↳ data → speciesrichness (csvs of order and family-level species richness calculated from IUCN data)
+
 
 Analysis scripts (numbered in order of use in the study pipeline). Each script is annotated at the top to describe its use.
 
